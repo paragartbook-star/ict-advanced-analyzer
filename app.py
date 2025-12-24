@@ -1801,7 +1801,8 @@ def show_auth_ui():
             full_name = st.text_input("Full Name (Optional)")
         
         with col2:
-            new_password = st.text_input("Password")
+            new_password = st.text_input("Password (visible text)")
+            st.caption("⚠️ Password is visible (Streamlit Cloud limitation). Type carefully!")
             confirm_password = st.text_input("Confirm Password")
             st.caption("⚠️ Note: Password fields are visible as text on public deployment (Streamlit Cloud limitation). Type carefully!")
             
