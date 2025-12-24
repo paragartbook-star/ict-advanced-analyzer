@@ -197,6 +197,16 @@ ICT_CONCEPTS = {
     'Power of 3': 50
 }
 
+# Initialize session state for advanced features
+if 'watchlist' not in st.session_state:
+    st.session_state.watchlist = []
+if 'alerts' not in st.session_state:
+    st.session_state.alerts = []
+if 'trade_history' not in st.session_state:
+    st.session_state.trade_history = []
+if 'portfolio_value' not in st.session_state:
+    st.session_state.portfolio_value = 100000  # Starting capital
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # KILL ZONE DETECTION
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -428,7 +438,7 @@ def analyze_asset(asset_data: Dict, asset_type: str, kill_zone: Dict) -> Dict:
     
     if asset_type == 'Crypto':
         # Crypto fundamental analysis
-        market_cap_score = min(100, (asset_data.get('market_cap', 0) / 1e9) * 10)  # Normalize by billions
+        market_cap_score = min(100, (asset_data.get('market_cap', 0) / 1e9) * 10)
         volume_score = min(100, (asset_data.get('volume_24h', 0) / 1e8) * 10)
         liquidity_score = asset_data.get('liquidity_score', 0) * 100
         sentiment_score = asset_data.get('sentiment_votes_up', 50)
@@ -496,6 +506,18 @@ def analyze_asset(asset_data: Dict, asset_type: str, kill_zone: Dict) -> Dict:
     volatility = abs(price_change)
     risk = min(10, max(1, int(volatility / 2) + (10 - kill_zone['priority'])))
     
+    # Target price calculation
+    current_price = asset_data.get('price', 0)
+    if signal in ['🟢 STRONG BUY', '🟢 BUY']:
+        target_price = current_price * (1 + (combined_score / 100) * 0.15)
+        stop_loss = current_price * 0.95
+    elif signal in ['🔴 STRONG SELL', '🔴 SELL']:
+        target_price = current_price * (1 - (combined_score / 100) * 0.15)
+        stop_loss = current_price * 1.05
+    else:
+        target_price = current_price
+        stop_loss = current_price * 0.97
+    
     return {
         **asset_data,
         'asset_type': asset_type,
@@ -506,7 +528,10 @@ def analyze_asset(asset_data: Dict, asset_type: str, kill_zone: Dict) -> Dict:
         'signal': signal,
         'risk': risk,
         'confidence': round((combined_score / 100) * 100, 1),
-        'ict_scores': ict_scores
+        'ict_scores': ict_scores,
+        'target_price': round(target_price, 2),
+        'stop_loss': round(stop_loss, 2),
+        'potential_return': round(((target_price - current_price) / current_price) * 100, 2)
     }
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -657,6 +682,17 @@ def main():
         st.image("https://img.icons8.com/fluency/96/000000/artificial-intelligence.png", width=80)
         st.title("⚙️ Control Panel")
         
+        # Watchlist Management
+        st.markdown("### ⭐ Watchlist")
+        if st.session_state.watchlist:
+            st.markdown(f"**{len(st.session_state.watchlist)} assets tracked**")
+            for item in st.session_state.watchlist[:5]:
+                st.text(f"• {item}")
+            if len(st.session_state.watchlist) > 5:
+                st.text(f"... and {len(st.session_state.watchlist) - 5} more")
+        else:
+            st.info("No assets in watchlist")
+        
         st.markdown("### 📂 Asset Selection")
         asset_types = st.multiselect(
             "Select Asset Types",
@@ -675,9 +711,164 @@ def main():
         
         max_risk = st.slider("Maximum Risk Level", 1, 10, 7)
         
+        # Advanced Filters
+        with st.expander("🔍 Advanced Filters"):
+            min_confidence = st.slider("Min Confidence %", 0, 100, 70)
+            min_volume = st.number_input("Min Daily Volume (M)", min_value=0, value=0, step=1)
+            trend_filter = st.multiselect(
+                "Trend Filter",
+                ['BULLISH', 'BEARISH', 'NEUTRAL', 'WEAK'],
+                default=['BULLISH']
+            )
+        
         st.markdown("### 📊 Display Options")
         top_n = st.number_input("Top N Assets", min_value=10, max_value=100, value=21, step=1)
         show_charts = st.checkbox("Show Candlestick Charts", value=True)
+        show_heatmap = st.checkbox("Show Performance Heatmap", value=True)
+        
+        # Alert Settings
+        st.markdown("### 🔔 Alert Settings")
+        alert_enabled = st.checkbox("Enable Price Alerts", value=True)
+        if alert_enabled:
+            alert_threshold = st.slider("Score Threshold for Alerts", 80, 100, 85)
+        
+        # Paper Trading
+        st.markdown("### 💰 Paper Trading")
+        st.metric("Portfolio Value", f"₹{st.session_state.portfolio_value:,.2f}")
+        if len(st.session_state.trade_history) > 0:
+            total_trades = len(st.session_state.trade_history)
+            st.metric("Total Trades", total_trades)
+        
+        st.markdown("---")
+        
+        # PERFORMANCE HEATMAP
+        if 'show_heatmap' in locals() and show_heatmap:
+            st.markdown("## 🔥 Performance Heatmap")
+            
+            # Create heatmap data
+            heatmap_data = df_filtered.pivot_table(
+                values='combined_score',
+                index='asset_type',
+                columns='trend',
+                aggfunc='mean'
+            ).fillna(0)
+            
+            fig = go.Figure(data=go.Heatmap(
+                z=heatmap_data.values,
+                x=heatmap_data.columns,
+                y=heatmap_data.index,
+                colorscale='Viridis',
+                text=heatmap_data.values.round(1),
+                texttemplate='%{text}',
+                textfont={"size": 14},
+                colorbar=dict(title="Score")
+            ))
+            
+            fig.update_layout(
+                title="Average Score by Asset Type & Trend",
+                template='plotly_dark',
+                height=400,
+                paper_bgcolor='rgba(26, 32, 44, 0.8)',
+                plot_bgcolor='rgba(26, 32, 44, 0.8)',
+                font=dict(color='#e2e8f0')
+            )
+            
+            st.plotly_chart(fig, use_container_width=True)
+        
+        st.markdown("---")
+        
+        # CORRELATION MATRIX
+        st.markdown("## 🔗 Score Correlation Analysis")
+        
+        # Select numeric columns for correlation
+        corr_cols = ['technical_score', 'fundamental_score', 'combined_score', 
+                     'confidence', 'risk', 'price_change_24h']
+        corr_data = df_filtered[corr_cols].corr()
+        
+        fig = go.Figure(data=go.Heatmap(
+            z=corr_data.values,
+            x=corr_cols,
+            y=corr_cols,
+            colorscale='RdBu',
+            zmid=0,
+            text=corr_data.values.round(2),
+            texttemplate='%{text}',
+            textfont={"size": 12},
+            colorbar=dict(title="Correlation")
+        ))
+        
+        fig.update_layout(
+            title="Feature Correlation Matrix",
+            template='plotly_dark',
+            height=500,
+            paper_bgcolor='rgba(26, 32, 44, 0.8)',
+            plot_bgcolor='rgba(26, 32, 44, 0.8)',
+            font=dict(color='#e2e8f0')
+        )
+        
+        st.plotly_chart(fig, use_container_width=True)
+        
+        st.markdown("---")
+        
+        # TRADE HISTORY
+        if len(st.session_state.trade_history) > 0:
+            st.markdown("## 📜 Recent Trade History")
+            
+            trade_df = pd.DataFrame(st.session_state.trade_history[-10:])
+            trade_df['time'] = trade_df['time'].dt.strftime('%Y-%m-%d %H:%M')
+            
+            st.dataframe(
+                trade_df[['symbol', 'type', 'price', 'signal', 'time']],
+                use_container_width=True,
+                height=300
+            )
+            
+            if st.button("🗑️ Clear Trade History"):
+                st.session_state.trade_history = []
+                st.rerun()
+        
+        st.markdown("---")
+        
+        # ICT CONCEPT BREAKDOWN
+        st.markdown("## 🧩 ICT Concept Analysis - Top 5 Assets")
+        
+        top_5_ict = df_filtered.head(5)
+        
+        for idx, asset in top_5_ict.iterrows():
+            with st.expander(f"📊 {asset['symbol']} - ICT Breakdown"):
+                ict_scores = asset['ict_scores']
+                
+                # Create radar chart
+                categories = list(ict_scores.keys())
+                values = list(ict_scores.values())
+                
+                fig = go.Figure()
+                
+                fig.add_trace(go.Scatterpolar(
+                    r=values,
+                    theta=categories,
+                    fill='toself',
+                    name=asset['symbol'],
+                    line_color='#3b82f6'
+                ))
+                
+                fig.update_layout(
+                    polar=dict(
+                        radialaxis=dict(
+                            visible=True,
+                            range=[0, 100],
+                            gridcolor='#2d3748'
+                        ),
+                        bgcolor='rgba(26, 32, 44, 0.8)'
+                    ),
+                    showlegend=False,
+                    template='plotly_dark',
+                    height=400,
+                    paper_bgcolor='rgba(26, 32, 44, 0.8)',
+                    font=dict(color='#e2e8f0')
+                )
+                
+                st.plotly_chart(fig, use_container_width=True)
         
         st.markdown("---")
         st.markdown("### 🔄 Data Refresh")
@@ -687,6 +878,7 @@ def main():
         
         st.markdown("---")
         st.markdown("**💡 Pro Tip:** Focus on STRONG BUY signals during active kill zones!")
+        st.markdown("**🎯 Tip:** Add assets to watchlist for tracking!")
     
     # Data Collection Progress
     with st.spinner("🔍 Scanning Markets..."):
@@ -758,7 +950,27 @@ def main():
         (df['risk'] <= max_risk)
     ].sort_values('combined_score', ascending=False).reset_index(drop=True)
     
+    # Apply advanced filters
+    if 'min_confidence' in locals():
+        df_filtered = df_filtered[df_filtered['confidence'] >= min_confidence]
+    if 'trend_filter' in locals():
+        df_filtered = df_filtered[df_filtered['trend'].isin(trend_filter)]
+    
     df_filtered['rank'] = range(1, len(df_filtered) + 1)
+    
+    # Generate alerts
+    if 'alert_enabled' in locals() and alert_enabled:
+        high_score_assets = df[df['combined_score'] >= alert_threshold]
+        for _, asset in high_score_assets.iterrows():
+            alert_msg = f"⚠️ {asset['symbol']}: Score {asset['combined_score']:.1f} - {asset['signal']}"
+            if alert_msg not in st.session_state.alerts:
+                st.session_state.alerts.append(alert_msg)
+    
+    # Show alerts
+    if st.session_state.alerts:
+        with st.expander(f"🔔 Active Alerts ({len(st.session_state.alerts)})", expanded=True):
+            for alert in st.session_state.alerts[-10:]:  # Show last 10 alerts
+                st.warning(alert)
     
     # Summary Metrics
     st.markdown("## 📊 Market Overview")
@@ -804,6 +1016,10 @@ def main():
                             else 'signal-sell'
                         )
                         
+                        # Watchlist button
+                        watchlist_key = f"{asset['symbol']}_{i}_{j}"
+                        is_in_watchlist = asset['symbol'] in st.session_state.watchlist
+                        
                         st.markdown(f"""
                         <div style='background: rgba(26, 32, 44, 0.8); padding: 20px; border-radius: 10px; 
                                     border-left: 4px solid {kill_zone['color']}; margin-bottom: 15px;'>
@@ -817,9 +1033,34 @@ def main():
                                 <p style='margin: 3px 0;'><strong>Trend:</strong> {asset['trend']}</p>
                                 <p style='margin: 3px 0;'><strong>Risk:</strong> {asset['risk']}/10</p>
                                 <p style='margin: 3px 0;'><strong>Type:</strong> {asset['asset_type']}</p>
+                                <p style='margin: 3px 0; color: #10b981;'><strong>Target:</strong> ₹{asset.get('target_price', 0):.2f}</p>
+                                <p style='margin: 3px 0; color: #ef4444;'><strong>SL:</strong> ₹{asset.get('stop_loss', 0):.2f}</p>
+                                <p style='margin: 3px 0;'><strong>Potential:</strong> {asset.get('potential_return', 0):+.2f}%</p>
                             </div>
                         </div>
                         """, unsafe_allow_html=True)
+                        
+                        col_btn1, col_btn2 = st.columns(2)
+                        with col_btn1:
+                            if st.button("⭐ Watch" if not is_in_watchlist else "❌ Unwatch", 
+                                       key=watchlist_key, use_container_width=True):
+                                if is_in_watchlist:
+                                    st.session_state.watchlist.remove(asset['symbol'])
+                                else:
+                                    st.session_state.watchlist.append(asset['symbol'])
+                                st.rerun()
+                        with col_btn2:
+                            if st.button("📊 Trade", key=f"trade_{watchlist_key}", use_container_width=True):
+                                # Add to trade history
+                                trade = {
+                                    'symbol': asset['symbol'],
+                                    'type': 'BUY' if 'BUY' in asset['signal'] else 'SELL',
+                                    'price': asset.get('price', 0),
+                                    'time': datetime.now(),
+                                    'signal': asset['signal']
+                                }
+                                st.session_state.trade_history.append(trade)
+                                st.success(f"Added {asset['symbol']} to trade history!")
         
         st.markdown("---")
         
