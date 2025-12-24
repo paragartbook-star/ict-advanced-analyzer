@@ -1758,7 +1758,8 @@ def show_auth_ui():
         col1, col2 = st.columns([2, 1])
         with col1:
             username = st.text_input("Username or Email")
-            password = st.text_input("Password", type="password")
+            password = st.text_input("Password")
+            st.caption("⚠️ Note: Password is visible as text on public deployment (Streamlit Cloud limitation). Type carefully!")
             
             # 2FA if enabled
             use_2fa = st.checkbox("Use Two-Factor Authentication")
@@ -1800,8 +1801,9 @@ def show_auth_ui():
             full_name = st.text_input("Full Name (Optional)")
         
         with col2:
-            new_password = st.text_input("Password", type="password")
-            confirm_password = st.text_input("Confirm Password", type="password")
+            new_password = st.text_input("Password")
+            confirm_password = st.text_input("Confirm Password")
+            st.caption("⚠️ Note: Password fields are visible as text on public deployment (Streamlit Cloud limitation). Type carefully!")
             
             # Enable 2FA by default
             enable_2fa = st.checkbox("Enable Two-Factor Authentication", value=True)
