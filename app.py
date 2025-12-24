@@ -81,63 +81,94 @@ st.set_page_config(
 # Professional Dark Theme CSS with Alert Styling
 st.markdown("""
 <style>
-    /* Main Background - Deep TradingView Black */
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+    
+    * {
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    }
+    
     .stApp {
-        background: #0d0d0d !important;
+        background-color: #000000;
+        color: #ffffff;
     }
-    
-    /* Sidebar - TradingView Style */
+
     [data-testid="stSidebar"] {
-        background: #131722 !important;
-        border-right: 1px solid #2a2e39 !important;
+        background-color: #0a0a0a;
+        border-right: 1px solid #1a1a1a;
     }
-    
-    /* Metric Cards - TradingView Cards */
+
     [data-testid="stMetric"] {
-        background: #1e222d !important;
-        padding: 15px;
+        background-color: #0f0f0f;
+        padding: 16px;
         border-radius: 4px;
-        border: 1px solid #2a2e39;
+        border: 1px solid #1a1a1a;
     }
     
-    /* Headers - TradingView White Text */
-    h1, h2, h3 {
-        color: #d1d4dc !important;
+    [data-testid="stMetricLabel"] {
+        color: #999999;
+        font-size: 13px;
+        font-weight: 500;
+    }
+    
+    [data-testid="stMetricValue"] {
+        color: #ffffff;
+        font-size: 24px;
         font-weight: 600;
     }
+
+    h1, h2, h3, h4, h5, h6 {
+        color: #ffffff !important;
+        font-weight: 600;
+        letter-spacing: -0.02em;
+    }
     
-    /* Tables - TradingView Style */
+    h1 {
+        font-size: 32px;
+        margin-bottom: 8px;
+    }
+    
+    h2 {
+        font-size: 24px;
+        margin-bottom: 16px;
+    }
+    
+    h3 {
+        font-size: 18px;
+        margin-bottom: 12px;
+    }
+
     .dataframe {
-        background: #1e222d !important;
-        color: #d1d4dc !important;
-        border: 1px solid #2a2e39;
+        background-color: #0f0f0f !important;
+        color: #ffffff !important;
+        border: 1px solid #1a1a1a;
         border-radius: 4px;
     }
-    
+
     .dataframe thead tr th {
-        background: #131722 !important;
-        color: #787b86 !important;
+        background-color: #0a0a0a !important;
+        color: #ffffff !important;
         font-weight: 600;
-        border-bottom: 1px solid #2a2e39;
-        text-transform: uppercase;
-        font-size: 11px;
+        border-bottom: 1px solid #1a1a1a;
+        padding: 12px;
+        font-size: 13px;
     }
     
-    .dataframe tbody tr:hover {
-        background: #2a2e39 !important;
+    .dataframe tbody tr td {
+        border-bottom: 1px solid #1a1a1a;
+        padding: 12px;
+        font-size: 14px;
     }
-    
-    /* Buttons - TradingView Blue */
+
     .stButton>button {
-        background: #2962ff !important;
-        color: white;
+        background-color: #ffffff;
+        color: #000000;
         border: none;
         border-radius: 4px;
-        padding: 8px 16px;
-        font-weight: 500;
+        padding: 10px 20px;
+        font-weight: 600;
+        font-size: 14px;
         transition: all 0.2s;
     }
-    
     
     .stButton>button:hover {
         background-color: #e6e6e6;
