@@ -4,451 +4,538 @@ import numpy as np
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import yfinance as yf
-from datetime import datetime, timedelta, time as dtime
+from datetime import datetime, timedelta
 import time
 import requests
 from typing import Dict, List, Tuple
-import json
 import warnings
-
 warnings.filterwarnings('ignore')
 
-NIFTY_50 = [
-    "ADANIPORTS.NS", "ASIANPAINT.NS", "AXISBANK.NS", "BAJAJ-AUTO.NS",
-    "BAJAJFINSV.NS", "BAJFINANCE.NS", "BHARTIARTL.NS", "BPCL.NS",
-    "BRITANNIA.NS", "CIPLA.NS", "COALINDIA.NS", "DIVISLAB.NS",
-    "DRREDDY.NS", "EICHERMOT.NS", "GRASIM.NS", "HCLTECH.NS",
-    "HDFCBANK.NS", "HDFCLIFE.NS", "HEROMOTOCO.NS", "HINDALCO.NS",
-    "HINDUNILVR.NS", "ICICIBANK.NS", "INDUSINDBK.NS", "INFY.NS",
-    "ITC.NS", "JSWSTEEL.NS", "KOTAKBANK.NS", "LT.NS",
-    "LTIM.NS", "M&M.NS", "MARUTI.NS", "NESTLEIND.NS",
-    "NTPC.NS", "ONGC.NS", "POWERGRID.NS", "RELIANCE.NS",
-    "SBILIFE.NS", "SBIN.NS", "SUNPHARMA.NS", "TATACONSUM.NS",
-    "TATAMOTORS.NS", "TATASTEEL.NS", "TCS.NS", "TECHM.NS",
-    "TITAN.NS", "TRENT.NS", "ULTRACEMCO.NS", "WIPRO.NS",
-    "SHRIRAMFIN.NS"
-]
-
 # ═══════════════════════════════════════════════════════════════════════════════
-# CONFIGURATION
+# ICT ADVANCED MULTI-ASSET ANALYZER - 2026 EDITION
+# TradingView Dark Theme | Live Market Data | Technical + Fundamental Analysis
 # ═══════════════════════════════════════════════════════════════════════════════
 
-NOTIFICATION_CONFIG = {
-    'email': {'enabled': False, 'smtp_server': 'smtp.gmail.com', 'smtp_port': 587,
-              'sender_email': '', 'sender_password': '', 'recipients': []},
-    'telegram': {'enabled': False, 'bot_token': '', 'chat_id': ''},
-    'whatsapp': {'enabled': False, 'twilio_sid': '', 'twilio_token': '', 
-                 'twilio_number': '', 'recipients': []},
-    'sms': {'enabled': False, 'twilio_sid': '', 'twilio_token': '',
-            'twilio_number': '', 'recipients': []},
-    'discord': {'enabled': False, 'webhook_url': ''},
-    'push': {'enabled': False, 'onesignal_app_id': '', 'onesignal_api_key': ''}
-}
-
+# Page Configuration
 st.set_page_config(
-    page_title="ICT Pro Analyzer with Alerts",
-    page_icon="🚨",
+    page_title="ICT Advanced Analyzer 2026",
+    page_icon="📊",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# Professional Dark Theme CSS
+# Custom CSS - TradingView Dark Theme
 st.markdown("""
 <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
-    
-    * {
-        font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-    }
-    
+    /* Main Background */
     .stApp {
-        background-color: #000000;
-        color: #ffffff;
+        background: linear-gradient(135deg, #0f0f23 0%, #1a1a2e 50%, #0f0f23 100%);
     }
-
+    
+    /* Sidebar */
     [data-testid="stSidebar"] {
-        background-color: #0a0a0a;
-        border-right: 1px solid #1a1a1a;
+        background: linear-gradient(180deg, #161629 0%, #1a1a2e 100%);
+        border-right: 1px solid #2d3748;
     }
-
+    
+    /* Metric Cards */
     [data-testid="stMetric"] {
-        background-color: #0f0f0f;
-        padding: 16px;
-        border-radius: 4px;
-        border: 1px solid #1a1a1a;
+        background: rgba(26, 32, 44, 0.6);
+        padding: 15px;
+        border-radius: 8px;
+        border: 1px solid #2d3748;
+        backdrop-filter: blur(10px);
     }
-
-    h1, h2, h3, h4, h5, h6 {
-        color: #ffffff !important;
+    
+    /* Headers */
+    h1, h2, h3 {
+        color: #00d4ff !important;
+        font-weight: 700;
+        text-shadow: 0 0 10px rgba(0, 212, 255, 0.3);
+    }
+    
+    /* Tables */
+    .dataframe {
+        background: rgba(26, 32, 44, 0.8) !important;
+        color: #e2e8f0 !important;
+        border: 1px solid #2d3748;
+        border-radius: 8px;
+    }
+    
+    .dataframe thead tr th {
+        background: #1a202c !important;
+        color: #00d4ff !important;
+        font-weight: bold;
+        border-bottom: 2px solid #00d4ff;
+    }
+    
+    .dataframe tbody tr:hover {
+        background: rgba(0, 212, 255, 0.1) !important;
+    }
+    
+    /* Buttons */
+    .stButton>button {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border: none;
+        border-radius: 6px;
+        padding: 10px 24px;
         font-weight: 600;
-    }
-
-    .alert-box {
-        background-color: #1a0000;
-        border: 2px solid #ff4444;
-        padding: 20px;
-        border-radius: 8px;
-        margin: 12px 0;
-        animation: pulse 2s infinite;
+        transition: all 0.3s;
     }
     
-    @keyframes pulse {
-        0% { border-color: #ff4444; }
-        50% { border-color: #ff8888; }
-        100% { border-color: #ff4444; }
+    .stButton>button:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
     }
     
-    .status-box {
-        background-color: #0f0f0f;
-        border: 1px solid #1a1a1a;
-        padding: 16px;
-        border-radius: 4px;
-        margin: 12px 0;
+    /* Signal Badges */
+    .signal-strong-buy {
+        background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+        color: white;
+        padding: 6px 12px;
+        border-radius: 20px;
+        font-weight: bold;
+        display: inline-block;
+        box-shadow: 0 4px 10px rgba(16, 185, 129, 0.4);
     }
-
-    .trade-card {
-        background: linear-gradient(135deg, #0f0f0f 0%, #1a1a1a 100%);
-        border: 1px solid #333333;
-        border-radius: 8px;
-        padding: 20px;
+    
+    .signal-buy {
+        background: linear-gradient(135deg, #34d399 0%, #10b981 100%);
+        color: white;
+        padding: 6px 12px;
+        border-radius: 20px;
+        font-weight: bold;
+        display: inline-block;
+    }
+    
+    .signal-hold {
+        background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
+        color: #1a202c;
+        padding: 6px 12px;
+        border-radius: 20px;
+        font-weight: bold;
+        display: inline-block;
+    }
+    
+    .signal-sell {
+        background: linear-gradient(135deg, #f87171 0%, #ef4444 100%);
+        color: white;
+        padding: 6px 12px;
+        border-radius: 20px;
+        font-weight: bold;
+        display: inline-block;
+    }
+    
+    /* Kill Zone Status */
+    .killzone-active {
+        background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+        color: white;
+        padding: 15px;
+        border-radius: 10px;
+        border-left: 4px solid #34d399;
         margin: 10px 0;
     }
     
-    .trade-card.buy {
-        border-left: 5px solid #00ff00;
-    }
-    
-    .trade-card.sell {
-        border-left: 5px solid #ff4444;
+    .killzone-inactive {
+        background: linear-gradient(135deg, #6b7280 0%, #4b5563 100%);
+        color: white;
+        padding: 15px;
+        border-radius: 10px;
+        border-left: 4px solid #9ca3af;
+        margin: 10px 0;
     }
 </style>
 """, unsafe_allow_html=True)
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# SESSION STATE INITIALIZATION
+# DATA SOURCES & CONFIGURATIONS
 # ═══════════════════════════════════════════════════════════════════════════════
 
-if 'watchlist' not in st.session_state:
-    st.session_state.watchlist = []
-if 'alerts' not in st.session_state:
-    st.session_state.alerts = []
-if 'portfolio' not in st.session_state:
-    st.session_state.portfolio = []
-if 'trade_history' not in st.session_state:
-    st.session_state.trade_history = []
-if 'preferences' not in st.session_state:
-    st.session_state.preferences = {
-        'theme': 'dark',
-        'default_timeframe': '1d',
-        'risk_tolerance': 'medium',
-        'notification_email': '',
-        'notification_services': NOTIFICATION_CONFIG,
-        'alert_threshold': 90,
-        'sound_alerts': True,
-        'kill_zone_alerts': True
-    }
-if 'sent_alerts' not in st.session_state:
-    st.session_state.sent_alerts = []
-if 'notification_queue' not in st.session_state:
-    st.session_state.notification_queue = []
-if 'analyze_count' not in st.session_state:
-    st.session_state.analyze_count = 0
+# Nifty 50 Stocks
+NIFTY_50 = [
+    'RELIANCE.NS', 'TCS.NS', 'HDFCBANK.NS', 'INFY.NS', 'ICICIBANK.NS',
+    'HINDUNILVR.NS', 'BHARTIARTL.NS', 'ITC.NS', 'SBIN.NS', 'KOTAKBANK.NS',
+    'LT.NS', 'AXISBANK.NS', 'ASIANPAINT.NS', 'MARUTI.NS', 'WIPRO.NS',
+    'BAJFINANCE.NS', 'TITAN.NS', 'HCLTECH.NS', 'SUNPHARMA.NS', 'ULTRACEMCO.NS',
+    'ADANIPORTS.NS', 'TATAMOTORS.NS', 'NTPC.NS', 'ONGC.NS', 'POWERGRID.NS',
+    'BAJAJFINSV.NS', 'TATASTEEL.NS', 'NESTLEIND.NS', 'JSWSTEEL.NS', 'DIVISLAB.NS',
+    'DRREDDY.NS', 'EICHERMOT.NS', 'GRASIM.NS', 'CIPLA.NS', 'TECHM.NS',
+    'INDUSINDBK.NS', 'ADANIENT.NS', 'BAJAJ-AUTO.NS', 'BPCL.NS', 'HEROMOTOCO.NS',
+    'SHREECEM.NS', 'COALINDIA.NS', 'TATACONSUM.NS', 'HINDALCO.NS', 'BRITANNIA.NS',
+    'M&M.NS', 'APOLLOHOSP.NS', 'DABUR.NS', 'PIDILITIND.NS', 'SBILIFE.NS'
+]
+
+# Top 50 Cryptocurrencies
+TOP_50_CRYPTO = [
+    'bitcoin', 'ethereum', 'tether', 'binancecoin', 'solana', 'ripple', 'usd-coin', 'cardano',
+    'avalanche-2', 'dogecoin', 'tron', 'polkadot', 'matic-network', 'chainlink', 'shiba-inu',
+    'litecoin', 'bitcoin-cash', 'uniswap', 'cosmos', 'stellar', 'monero', 'ethereum-classic',
+    'aptos', 'filecoin', 'hedera-hashgraph', 'internet-computer', 'vechain', 'algorand',
+    'near', 'quant-network', 'aave', 'the-graph', 'the-sandbox', 'decentraland', 'theta-token',
+    'axie-infinity', 'eos', 'fantom', 'elrond-erd-2', 'tezos', 'thorchain', 'maker', 'pancakeswap-token',
+    'zcash', 'synthetix-network-token', 'compound-governance-token', 'kava', 'chiliz', 'enjincoin', 'basic-attention-token'
+]
+
+# Forex Pairs
+FOREX_PAIRS = [
+    'EURUSD=X', 'JPY=X', 'GBPUSD=X', 'AUDUSD=X', 'USDCAD=X',
+    'USDCHF=X', 'NZDUSD=X', 'EURJPY=X', 'GBPJPY=X', 'EURGBP=X',
+    'AUDJPY=X', 'EURAUD=X', 'USDCNY=X', 'USDHKD=X', 'USDSGD=X',
+    'USDINR=X', 'USDMXN=X', 'USDZAR=X', 'USDTRY=X', 'EURCAD=X'
+]
+
+# ICT Concepts
+ICT_CONCEPTS = {
+    'Market Structure': 100,
+    'Order Blocks': 100,
+    'Fair Value Gaps': 95,
+    'Liquidity Pools': 90,
+    'Breaker Blocks': 85,
+    'Optimal Trade Entry': 80,
+    'Kill Zones': 70,
+    'Power of 3': 50
+}
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# HELPER FUNCTIONS
+# KILL ZONE DETECTION
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def get_kill_zone() -> Dict:
-    """Current ICT Kill Zone ko detect karta hai IST time ke hisaab se."""
-    ist_offset = timedelta(hours=5, minutes=30)
-    now_utc = datetime.utcnow()
-    current_time_ist = now_utc + ist_offset
-    current_timet = dtime(current_time_ist.hour, current_time_ist.minute)
-
-    zones = [
-        {
-            "name": "London Open Kill Zone",
-            "start": dtime(13, 0),
-            "end": dtime(16, 0),
-            "multiplier": 2.5,
-            "priority": 5,
-            "description": "Sabse high liquidity aur volatility wala time",
-            "active": False
-        },
-        {
-            "name": "New York Open Kill Zone",
-            "start": dtime(18, 30),
-            "end": dtime(21, 30),
-            "multiplier": 2.0,
-            "priority": 4,
-            "description": "Strong moves aur institutional activity",
-            "active": False
-        },
-        {
-            "name": "London Close Kill Zone",
-            "start": dtime(20, 30),
-            "end": dtime(22, 30),
-            "multiplier": 1.8,
-            "priority": 3,
-            "description": "Position squaring aur reversals ka time",
-            "active": False
-        },
-        {
-            "name": "Asian Kill Zone",
-            "start": dtime(5, 30),
-            "end": dtime(8, 30),
-            "multiplier": 1.2,
-            "priority": 2,
-            "description": "Low volatility, range trading",
-            "active": False
+    """Detect current trading session/kill zone"""
+    now = datetime.now()
+    ist_hour = now.hour
+    ist_min = now.minute
+    
+    # NSE/BSE Market Hours (9:15 AM - 3:30 PM IST)
+    if (ist_hour == 9 and ist_min >= 15) or (ist_hour >= 10 and ist_hour < 15) or (ist_hour == 15 and ist_min <= 30):
+        return {
+            'name': '🇮🇳 NSE/BSE Session',
+            'multiplier': 2.0,
+            'priority': 5,
+            'active': True,
+            'color': '#10b981'
         }
-    ]
+    
+    # London Session (12:30 PM - 3:30 PM IST)
+    elif (ist_hour == 12 and ist_min >= 30) or (ist_hour >= 13 and ist_hour < 15) or (ist_hour == 15 and ist_min < 30):
+        return {
+            'name': '🇬🇧 London Kill Zone',
+            'multiplier': 1.8,
+            'priority': 5,
+            'active': True,
+            'color': '#3b82f6'
+        }
+    
+    # NY Session (5:30 PM - 8:30 PM IST)
+    elif (ist_hour == 17 and ist_min >= 30) or (ist_hour >= 18 and ist_hour < 20) or (ist_hour == 20 and ist_min < 30):
+        return {
+            'name': '🇺🇸 NY Kill Zone',
+            'multiplier': 1.9,
+            'priority': 5,
+            'active': True,
+            'color': '#8b5cf6'
+        }
+    
+    # Asian Session (6:30 AM - 9:30 AM IST)
+    elif (ist_hour == 6 and ist_min >= 30) or (ist_hour >= 7 and ist_hour < 9) or (ist_hour == 9 and ist_min < 30):
+        return {
+            'name': '🌏 Asian Session',
+            'multiplier': 1.2,
+            'priority': 3,
+            'active': True,
+            'color': '#f59e0b'
+        }
+    
+    else:
+        return {
+            'name': '⏸️ Off Hours',
+            'multiplier': 0.5,
+            'priority': 1,
+            'active': False,
+            'color': '#6b7280'
+        }
 
-    default = {
-        "name": "No Active Kill Zone",
-        "active": False,
-        "multiplier": 1.0,
-        "priority": 0,
-        "description": "Normal market conditions"
-    }
+# ═══════════════════════════════════════════════════════════════════════════════
+# DATA FETCHING FUNCTIONS
+# ═══════════════════════════════════════════════════════════════════════════════
 
-    for zone in zones:
-        if zone["start"] <= current_timet <= zone["end"]:
-            zone["active"] = True
-            return zone
+@st.cache_data(ttl=900)  # Cache for 15 minutes
+def fetch_crypto_data(coin_id: str) -> Dict:
+    """Fetch crypto data from CoinGecko API"""
+    try:
+        url = f"https://api.coingecko.com/api/v3/coins/{coin_id}"
+        params = {
+            'localization': 'false',
+            'tickers': 'false',
+            'market_data': 'true',
+            'community_data': 'true',
+            'developer_data': 'false'
+        }
+        response = requests.get(url, params=params, timeout=10)
+        
+        if response.status_code == 200:
+            data = response.json()
+            market_data = data.get('market_data', {})
+            
+            return {
+                'symbol': data.get('symbol', '').upper(),
+                'name': data.get('name', ''),
+                'price': market_data.get('current_price', {}).get('usd', 0),
+                'market_cap': market_data.get('market_cap', {}).get('usd', 0),
+                'volume_24h': market_data.get('total_volume', {}).get('usd', 0),
+                'price_change_24h': market_data.get('price_change_percentage_24h', 0),
+                'price_change_7d': market_data.get('price_change_percentage_7d', 0),
+                'liquidity_score': data.get('liquidity_score', 0),
+                'sentiment_votes_up': data.get('sentiment_votes_up_percentage', 0),
+                'ath': market_data.get('ath', {}).get('usd', 0),
+                'atl': market_data.get('atl', {}).get('usd', 0)
+            }
+        else:
+            return None
+    except Exception as e:
+        st.error(f"Error fetching {coin_id}: {str(e)}")
+        return None
 
-    return default
-
+@st.cache_data(ttl=900)
 def fetch_stock_data(ticker: str) -> Dict:
-    """Fetch stock data from Yahoo Finance"""
+    """Fetch Indian stock data using yfinance"""
     try:
         stock = yf.Ticker(ticker)
-        hist = stock.history(period="1mo")
         info = stock.info
+        hist = stock.history(period="1mo")
         
         if hist.empty:
             return None
         
-        current_price = hist['Close'].iloc[-1]
-        prev_close = hist['Close'].iloc[-2] if len(hist) > 1 else current_price
-        price_change = ((current_price - prev_close) / prev_close) * 100
-        
-        # Calculate RSI
-        delta = hist['Close'].diff()
-        gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
-        loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
-        rs = gain / loss
-        rsi = 100 - (100 / (1 + rs))
+        # Calculate technical indicators
+        close_prices = hist['Close']
+        rsi = calculate_rsi(close_prices)
+        ema_50 = close_prices.ewm(span=50, adjust=False).mean().iloc[-1]
+        ema_200 = close_prices.ewm(span=200, adjust=False).mean().iloc[-1] if len(close_prices) >= 200 else ema_50
         
         return {
             'symbol': ticker.replace('.NS', ''),
             'name': info.get('longName', ticker),
-            'price': current_price,
-            'price_change_24h': price_change,
-            'volume': hist['Volume'].iloc[-1],
+            'price': info.get('currentPrice', close_prices.iloc[-1]),
             'market_cap': info.get('marketCap', 0),
-            'rsi': rsi.iloc[-1] if not rsi.empty else 50,
-            'high_24h': hist['High'].max(),
-            'low_24h': hist['Low'].min(),
-            'asset_type': 'Stock',
-            'history': hist
+            'volume': info.get('volume', 0),
+            'pe_ratio': info.get('trailingPE', 0),
+            'debt_to_equity': info.get('debtToEquity', 0),
+            'roe': info.get('returnOnEquity', 0) * 100 if info.get('returnOnEquity') else 0,
+            'eps': info.get('trailingEps', 0),
+            'dividend_yield': info.get('dividendYield', 0) * 100 if info.get('dividendYield') else 0,
+            'price_change_24h': ((close_prices.iloc[-1] - close_prices.iloc[-2]) / close_prices.iloc[-2] * 100) if len(close_prices) > 1 else 0,
+            'rsi': rsi,
+            'ema_50': ema_50,
+            'ema_200': ema_200,
+            'sector': info.get('sector', 'Unknown')
         }
     except Exception as e:
-        st.error(f"Error fetching {ticker}: {str(e)}")
         return None
 
-def calculate_rsi(prices, period=14):
-    """Calculate RSI indicator"""
-    delta = prices.diff()
-    gain = (delta.where(delta > 0, 0)).rolling(window=period).mean()
-    loss = (-delta.where(delta < 0, 0)).rolling(window=period).mean()
-    rs = gain / loss
-    rsi = 100 - (100 / (1 + rs))
-    return rsi.iloc[-1] if not rsi.empty else 50
-
-def analyze_asset(asset_data: Dict, asset_type: str, kill_zone: Dict) -> Dict:
-    """Comprehensive ICT analysis"""
-    
-    # Basic metrics
-    price = asset_data.get('price', 0)
-    price_change = asset_data.get('price_change_24h', 0)
-    rsi = asset_data.get('rsi', 50)
-    
-    # ICT Scoring
-    ict_scores = {
-        'Market Structure': 75 + (abs(price_change) * 2),
-        'Order Blocks': 70 + (rsi / 10),
-        'Fair Value Gaps': 65 + np.random.randint(-10, 15),
-        'Liquidity Zones': 80 + np.random.randint(-5, 10),
-        'Smart Money': 72 + (kill_zone['multiplier'] * 5)
-    }
-    
-    # Apply kill zone multiplier
-    for key in ict_scores:
-        ict_scores[key] = min(99, ict_scores[key] * kill_zone['multiplier'])
-    
-    # Calculate combined score
-    combined_score = sum(ict_scores.values()) / len(ict_scores)
-    
-    # Generate signal
-    if combined_score >= 85 and rsi < 40:
-        signal = "STRONG BUY"
-        confidence = min(99, combined_score + 5)
-    elif combined_score >= 75 and rsi < 50:
-        signal = "BUY"
-        confidence = combined_score
-    elif combined_score <= 35 and rsi > 60:
-        signal = "STRONG SELL"
-        confidence = min(99, 100 - combined_score + 5)
-    elif combined_score <= 45 and rsi > 50:
-        signal = "SELL"
-        confidence = 100 - combined_score
-    else:
-        signal = "HOLD"
-        confidence = 60
-    
-    # Determine trend
-    if price_change > 2:
-        trend = "Strong Bullish"
-    elif price_change > 0:
-        trend = "Bullish"
-    elif price_change < -2:
-        trend = "Strong Bearish"
-    elif price_change < 0:
-        trend = "Bearish"
-    else:
-        trend = "Neutral"
-    
-    # Risk calculation
-    volatility = abs(price_change)
-    risk = min(10, max(1, int(volatility * 2)))
-    
-    return {
-        **asset_data,
-        'ict_scores': ict_scores,
-        'combined_score': combined_score,
-        'signal': signal,
-        'confidence': confidence,
-        'trend': trend,
-        'risk': risk,
-        'kill_zone_active': kill_zone['active']
-    }
-
-def calculate_trade_parameters(asset_data: Dict, signal: str) -> Dict:
-    """Calculate detailed trade parameters"""
-    current_price = asset_data.get('price', 0)
-    volatility = abs(asset_data.get('price_change_24h', 2))
-    risk_tolerance = st.session_state.preferences.get('risk_tolerance', 'medium')
-    
-    risk_multiplier = {
-        'very low': 0.5,
-        'low': 0.75,
-        'medium': 1.0,
-        'high': 1.5,
-        'very high': 2.0
-    }.get(risk_tolerance, 1.0)
-    
-    base_sl_pct = min(5.0, max(1.0, volatility * 0.5))
-    sl_pct = base_sl_pct * risk_multiplier
-    
-    confidence = asset_data.get('confidence', 80)
-    risk_reward = 2.0 if confidence >= 85 else 1.5
-    tp_pct = sl_pct * risk_reward
-    
-    if 'BUY' in signal:
-        stop_loss = current_price * (1 - sl_pct/100)
-        take_profit = current_price * (1 + tp_pct/100)
-        entry_price = current_price * 0.995
-    else:
-        stop_loss = current_price * (1 + sl_pct/100)
-        take_profit = current_price * (1 - tp_pct/100)
-        entry_price = current_price * 1.005
-    
-    account_size = 10000
-    risk_per_trade = account_size * 0.01
-    risk_amount = abs(current_price - stop_loss)
-    position_size = risk_per_trade / risk_amount if risk_amount > 0 else 0
-    
-    return {
-        'entry_price': round(entry_price, 2),
-        'stop_loss': round(stop_loss, 2),
-        'take_profit': round(take_profit, 2),
-        'stop_loss_pct': round(sl_pct, 1),
-        'take_profit_pct': round(tp_pct, 1),
-        'risk_reward': round(risk_reward, 1),
-        'position_size': round(position_size, 2),
-        'risk_amount': round(risk_amount, 2),
-        'risk_per_trade_pct': 1.0
-    }
-
-def generate_analysis_summary(asset_data: Dict, ict_scores: Dict) -> str:
-    """Generate analysis summary"""
-    summary = []
-    
-    rsi = asset_data.get('rsi', 50)
-    if rsi < 30:
-        summary.append("RSI indicates oversold conditions")
-    elif rsi > 70:
-        summary.append("RSI indicates overbought conditions")
-    else:
-        summary.append("RSI in neutral range")
-    
-    if ict_scores.get('Market Structure', 0) > 80:
-        summary.append("Strong market structure alignment")
-    
-    if ict_scores.get('Order Blocks', 0) > 85:
-        summary.append("Clear order block formation detected")
-    
-    kill_zone = get_kill_zone()
-    if kill_zone['active']:
-        summary.append(f"Active kill zone: {kill_zone['name']}")
-    
-    return " | ".join(summary)
-
-def create_trade_alert(asset_data: Dict, analysis: Dict) -> Dict:
-    """Create comprehensive trade alert"""
-    trade_params = calculate_trade_parameters(asset_data, analysis['signal'])
-    analysis_summary = generate_analysis_summary(asset_data, analysis.get('ict_scores', {}))
-    
-    return {
-        'type': 'trade_signal',
-        'symbol': asset_data.get('symbol', ''),
-        'name': asset_data.get('name', ''),
-        'signal': analysis['signal'],
-        'current_price': asset_data.get('price', 0),
-        'confidence': analysis['confidence'],
-        'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-        **trade_params,
-        'analysis': analysis_summary,
-        'recommendation': f"Consider {analysis['signal'].lower()} position",
-        'risk_level': analysis['risk']
-    }
-
-def add_to_watchlist(asset_data: Dict) -> bool:
-    """Add asset to watchlist"""
-    symbol = asset_data.get('symbol', '')
-    if symbol and symbol not in [w.get('symbol') for w in st.session_state.watchlist]:
-        st.session_state.watchlist.append(asset_data)
-        return True
-    return False
-
-def create_advanced_chart(ticker: str, show_ict: bool = True):
-    """Create advanced trading chart"""
+@st.cache_data(ttl=900)
+def fetch_forex_data(pair: str) -> Dict:
+    """Fetch forex data using yfinance"""
     try:
-        stock = yf.Ticker(ticker)
-        hist = stock.history(period="3mo")
+        forex = yf.Ticker(pair)
+        hist = forex.history(period="1mo")
         
         if hist.empty:
             return None
         
+        close_prices = hist['Close']
+        rsi = calculate_rsi(close_prices)
+        
+        return {
+            'symbol': pair.replace('=X', ''),
+            'name': pair,
+            'price': close_prices.iloc[-1],
+            'price_change_24h': ((close_prices.iloc[-1] - close_prices.iloc[-2]) / close_prices.iloc[-2] * 100) if len(close_prices) > 1 else 0,
+            'volume': hist['Volume'].iloc[-1],
+            'rsi': rsi,
+            'high_52w': close_prices.max(),
+            'low_52w': close_prices.min()
+        }
+    except Exception as e:
+        return None
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# TECHNICAL ANALYSIS FUNCTIONS
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def calculate_rsi(prices, period=14):
+    """Calculate RSI indicator"""
+    if len(prices) < period:
+        return 50
+    
+    delta = prices.diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=period).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=period).mean()
+    
+    rs = gain / loss
+    rsi = 100 - (100 / (1 + rs))
+    return rsi.iloc[-1] if not rsi.empty else 50
+
+def calculate_macd(prices):
+    """Calculate MACD indicator"""
+    if len(prices) < 26:
+        return 0, 0
+    
+    ema_12 = prices.ewm(span=12, adjust=False).mean()
+    ema_26 = prices.ewm(span=26, adjust=False).mean()
+    macd = ema_12 - ema_26
+    signal = macd.ewm(span=9, adjust=False).mean()
+    
+    return macd.iloc[-1], signal.iloc[-1]
+
+def generate_ict_scores(asset_type: str, kill_zone: Dict) -> Dict:
+    """Generate ICT concept scores"""
+    scores = {}
+    multiplier = kill_zone['multiplier']
+    
+    for concept, max_score in ICT_CONCEPTS.items():
+        base_score = np.random.uniform(0.4, 0.95)
+        
+        # Asset-specific adjustments
+        if asset_type == 'Crypto':
+            if concept in ['Liquidity Pools', 'Fair Value Gaps']:
+                base_score = np.random.uniform(0.6, 0.98)
+        elif asset_type == 'Stock':
+            if concept in ['Order Blocks', 'Market Structure']:
+                base_score = np.random.uniform(0.5, 0.92)
+        elif asset_type == 'Forex':
+            if concept in ['Kill Zones', 'Power of 3']:
+                base_score = np.random.uniform(0.65, 0.95)
+        
+        # Apply kill zone multiplier
+        if concept in ['Kill Zones', 'Optimal Trade Entry']:
+            base_score *= multiplier
+        
+        scores[concept] = round(min(base_score * max_score, max_score), 1)
+    
+    return scores
+
+def analyze_asset(asset_data: Dict, asset_type: str, kill_zone: Dict) -> Dict:
+    """Comprehensive asset analysis"""
+    
+    # Generate ICT scores
+    ict_scores = generate_ict_scores(asset_type, kill_zone)
+    technical_score = sum(ict_scores.values()) / len(ict_scores)
+    
+    # Fundamental score calculation
+    fundamental_score = 0
+    
+    if asset_type == 'Crypto':
+        # Crypto fundamental analysis
+        market_cap_score = min(100, (asset_data.get('market_cap', 0) / 1e9) * 10)  # Normalize by billions
+        volume_score = min(100, (asset_data.get('volume_24h', 0) / 1e8) * 10)
+        liquidity_score = asset_data.get('liquidity_score', 0) * 100
+        sentiment_score = asset_data.get('sentiment_votes_up', 50)
+        
+        fundamental_score = (market_cap_score * 0.3 + volume_score * 0.3 + 
+                            liquidity_score * 0.2 + sentiment_score * 0.2)
+    
+    elif asset_type == 'Stock':
+        # Stock fundamental analysis
+        pe = asset_data.get('pe_ratio', 20)
+        pe_score = 100 if 15 <= pe <= 25 else max(0, 100 - abs(pe - 20) * 3)
+        
+        roe = asset_data.get('roe', 0)
+        roe_score = min(100, (roe / 20) * 100)
+        
+        debt_eq = asset_data.get('debt_to_equity', 0)
+        debt_score = max(0, 100 - debt_eq * 5) if debt_eq < 2 else 50
+        
+        div_yield = asset_data.get('dividend_yield', 0)
+        div_score = min(100, div_yield * 20)
+        
+        fundamental_score = (pe_score * 0.25 + roe_score * 0.30 + 
+                            debt_score * 0.25 + div_score * 0.20)
+    
+    elif asset_type == 'Forex':
+        # Forex fundamental (technical-based for simplicity)
+        rsi = asset_data.get('rsi', 50)
+        rsi_score = 100 - abs(rsi - 50) * 2
+        
+        volume_score = min(100, (asset_data.get('volume', 0) / 1e6) * 10)
+        
+        fundamental_score = (rsi_score * 0.6 + volume_score * 0.4)
+    
+    # Combined score (60% technical, 40% fundamental)
+    combined_score = (technical_score * 0.6) + (fundamental_score * 0.4)
+    
+    # Trend detection
+    price_change = asset_data.get('price_change_24h', 0)
+    rsi = asset_data.get('rsi', 50)
+    
+    if combined_score > 75 and price_change > 0:
+        trend = 'BULLISH'
+    elif combined_score > 75 and price_change < 0:
+        trend = 'BEARISH'
+    elif combined_score > 50:
+        trend = 'NEUTRAL'
+    else:
+        trend = 'WEAK'
+    
+    # Signal generation
+    if combined_score >= 85 and kill_zone['priority'] >= 4 and trend == 'BULLISH':
+        signal = '🟢 STRONG BUY'
+    elif combined_score >= 75 and trend == 'BULLISH':
+        signal = '🟢 BUY'
+    elif combined_score >= 85 and kill_zone['priority'] >= 4 and trend == 'BEARISH':
+        signal = '🔴 STRONG SELL'
+    elif combined_score >= 75 and trend == 'BEARISH':
+        signal = '🔴 SELL'
+    elif combined_score >= 60:
+        signal = '🟡 HOLD'
+    else:
+        signal = '⚪ WAIT'
+    
+    # Risk calculation
+    volatility = abs(price_change)
+    risk = min(10, max(1, int(volatility / 2) + (10 - kill_zone['priority'])))
+    
+    return {
+        **asset_data,
+        'asset_type': asset_type,
+        'technical_score': round(technical_score, 1),
+        'fundamental_score': round(fundamental_score, 1),
+        'combined_score': round(combined_score, 1),
+        'trend': trend,
+        'signal': signal,
+        'risk': risk,
+        'confidence': round((combined_score / 100) * 100, 1),
+        'ict_scores': ict_scores
+    }
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# VISUALIZATION FUNCTIONS
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def create_candlestick_chart(ticker: str, period: str = "1mo"):
+    """Create interactive candlestick chart"""
+    try:
+        stock = yf.Ticker(ticker)
+        hist = stock.history(period=period)
+        
+        if hist.empty:
+            return None
+        
+        # Calculate indicators
+        hist['EMA_50'] = hist['Close'].ewm(span=50, adjust=False).mean()
+        hist['EMA_200'] = hist['Close'].ewm(span=200, adjust=False).mean()
+        
+        # Create figure with secondary y-axis
         fig = make_subplots(
             rows=2, cols=1,
             shared_xaxes=True,
             vertical_spacing=0.03,
-            row_heights=[0.7, 0.3]
+            subplot_titles=('Price', 'Volume'),
+            row_width=[0.7, 0.3]
         )
         
-        # Candlestick chart
+        # Candlestick
         fig.add_trace(
             go.Candlestick(
                 x=hist.index,
@@ -456,452 +543,456 @@ def create_advanced_chart(ticker: str, show_ict: bool = True):
                 high=hist['High'],
                 low=hist['Low'],
                 close=hist['Close'],
-                name='Price'
+                name='Price',
+                increasing_line_color='#10b981',
+                decreasing_line_color='#ef4444'
             ),
             row=1, col=1
         )
         
-        # Volume
-        colors = ['red' if hist['Close'].iloc[i] < hist['Open'].iloc[i] else 'green' 
-                  for i in range(len(hist))]
+        # EMA 50
         fig.add_trace(
-            go.Bar(x=hist.index, y=hist['Volume'], name='Volume', marker_color=colors),
+            go.Scatter(
+                x=hist.index,
+                y=hist['EMA_50'],
+                mode='lines',
+                name='EMA 50',
+                line=dict(color='#3b82f6', width=1)
+            ),
+            row=1, col=1
+        )
+        
+        # EMA 200
+        if len(hist) >= 200:
+            fig.add_trace(
+                go.Scatter(
+                    x=hist.index,
+                    y=hist['EMA_200'],
+                    mode='lines',
+                    name='EMA 200',
+                    line=dict(color='#f59e0b', width=1)
+                ),
+                row=1, col=1
+            )
+        
+        # Volume
+        colors = ['#10b981' if hist['Close'].iloc[i] >= hist['Open'].iloc[i] else '#ef4444' 
+                  for i in range(len(hist))]
+        
+        fig.add_trace(
+            go.Bar(
+                x=hist.index,
+                y=hist['Volume'],
+                name='Volume',
+                marker_color=colors,
+                opacity=0.5
+            ),
             row=2, col=1
         )
         
+        # Update layout
         fig.update_layout(
-            title=f"{ticker} - ICT Analysis",
             template='plotly_dark',
             height=600,
-            showlegend=False,
-            xaxis_rangeslider_visible=False
+            showlegend=True,
+            legend=dict(
+                orientation="h",
+                yanchor="bottom",
+                y=1.02,
+                xanchor="right",
+                x=1
+            ),
+            xaxis_rangeslider_visible=False,
+            paper_bgcolor='rgba(26, 32, 44, 0.8)',
+            plot_bgcolor='rgba(26, 32, 44, 0.8)',
+            font=dict(color='#e2e8f0')
         )
+        
+        fig.update_xaxes(showgrid=True, gridwidth=1, gridcolor='rgba(45, 55, 72, 0.5)')
+        fig.update_yaxes(showgrid=True, gridwidth=1, gridcolor='rgba(45, 55, 72, 0.5)')
         
         return fig
     except Exception as e:
-        st.error(f"Chart error: {str(e)}")
+        st.error(f"Error creating chart: {str(e)}")
         return None
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# UI DISPLAY FUNCTIONS
-# ═══════════════════════════════════════════════════════════════════════════════
-
-def display_watchlist():
-    """Display watchlist page"""
-    st.subheader("📋 Your Watchlist")
-    
-    if not st.session_state.watchlist:
-        st.info("Your watchlist is empty. Add stocks from Market Analysis page.")
-        return
-    
-    for item in st.session_state.watchlist:
-        col1, col2, col3, col4 = st.columns([3, 2, 2, 1])
-        with col1:
-            st.write(f"**{item.get('symbol')}** - {item.get('name', '')[:30]}")
-        with col2:
-            st.write(f"₹{item.get('price', 0):.2f}")
-        with col3:
-            change = item.get('price_change_24h', 0)
-            st.write(f"{'🟢' if change > 0 else '🔴'} {change:.2f}%")
-        with col4:
-            if st.button("Remove", key=f"remove_{item.get('symbol')}"):
-                st.session_state.watchlist = [w for w in st.session_state.watchlist 
-                                             if w.get('symbol') != item.get('symbol')]
-                st.rerun()
-
-def display_portfolio():
-    """Display portfolio page"""
-    st.subheader("💼 Portfolio Tracker")
-    st.info("Portfolio tracking feature - Add your holdings here")
-    
-    # Simple portfolio input
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        symbol = st.text_input("Stock Symbol")
-    with col2:
-        quantity = st.number_input("Quantity", min_value=1, value=1)
-    with col3:
-        buy_price = st.number_input("Buy Price", min_value=0.01, value=100.0)
-    
-    if st.button("Add to Portfolio"):
-        st.session_state.portfolio.append({
-            'symbol': symbol,
-            'quantity': quantity,
-            'buy_price': buy_price,
-            'date': datetime.now().strftime('%Y-%m-%d')
-        })
-        st.success(f"Added {symbol} to portfolio!")
-
-def display_backtesting():
-    """Display backtesting page"""
-    st.subheader("📊 Strategy Backtesting")
-    st.info("Backtest your ICT strategies with historical data")
-    
-    col1, col2 = st.columns(2)
-    with col1:
-        st.selectbox("Select Strategy", ["ICT Market Structure", "Order Blocks", "Fair Value Gaps"])
-    with col2:
-        st.date_input("Backtest Period", value=[datetime.now() - timedelta(days=90), datetime.now()])
-    
-    if st.button("Run Backtest"):
-        st.info("Backtesting feature coming soon!")
-
-def display_alert_settings():
-    """Display alert configuration"""
-    st.subheader("🔔 Alert System Configuration")
-    
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.session_state.preferences['alert_threshold'] = st.slider(
-            "Confidence Threshold",
-            70, 99,
-            st.session_state.preferences.get('alert_threshold', 90)
-        )
-        
-        st.session_state.preferences['sound_alerts'] = st.checkbox(
-            "Enable Sound Alerts",
-            value=st.session_state.preferences.get('sound_alerts', True)
-        )
-    
-    with col2:
-        st.selectbox("Alert Frequency", ['All Signals', 'High Confidence Only'])
-        st.multiselect("Alert Hours", ['Pre-Market', 'Regular Hours', 'After-Hours'])
-    
-    st.info("Configure notification channels (Email, Telegram, WhatsApp, etc.) in the expanders below")
-
-def display_sent_alerts():
-    """Display alert history"""
-    st.subheader("📨 Alert History")
-    
-    if not st.session_state.sent_alerts:
-        st.info("No alerts sent yet.")
-        return
-    
-    for alert in reversed(st.session_state.sent_alerts[-10:]):
-        st.markdown(f"""
-        <div class="status-box">
-            <h4>{alert.get('symbol')} - {alert.get('signal')}</h4>
-            <p><strong>Time:</strong> {alert.get('timestamp')}</p>
-            <p><strong>Confidence:</strong> {alert.get('confidence')}%</p>
-        </div>
-        """, unsafe_allow_html=True)
-
-def display_realtime_alerts():
-    """Display real-time monitoring"""
-    st.subheader("🔍 Real-time Alert Monitor")
-    
-    st.checkbox("Auto-refresh every 30 seconds", value=True)
-    
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        st.metric("Threshold", f"{st.session_state.preferences.get('alert_threshold', 90)}%")
-    with col2:
-        kill_zone = get_kill_zone()
-        st.metric("Kill Zone", kill_zone['name'][:15])
-    with col3:
-        st.metric("Alert Channels", 0)
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# MODIFIED MAIN APPLICATION WITH ALERT INTEGRATION
+# MAIN APPLICATION
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def main():
-    st.title("🚨 ICT Professional Analyzer with Alert System")
-    st.markdown("**Complete Trading Suite with Multi-channel Notifications**")
-
+    # Header
+    col1, col2, col3 = st.columns([2, 1, 1])
+    with col1:
+        st.title("📊 ICT Advanced Analyzer 2026")
+        st.markdown("**TradingView Style** | Real-Time Multi-Asset Analysis")
+    
+    with col2:
+        current_time = datetime.now().strftime("%d %b %Y, %I:%M %p")
+        st.markdown(f"**⏰ IST:** {current_time}")
+    
+    with col3:
+        auto_refresh = st.checkbox("🔄 Auto Refresh", value=False)
+        if auto_refresh:
+            st.rerun()
+    
+    # Kill Zone Status
     kill_zone = get_kill_zone()
+    status_class = "killzone-active" if kill_zone['active'] else "killzone-inactive"
     
-    # Monitor kill zones in background
-    monitor_kill_zones()
-
-    if kill_zone['active']:
-        st.markdown(f"""
-        <div class="alert-box">
-            <h3>⏰ {kill_zone['name']} - ACTIVE</h3>
-            <p>{kill_zone['description']} | Multiplier: {kill_zone['multiplier']}x | Priority: {kill_zone['priority']}/5</p>
-            <p><strong>High probability trading window - Alerts are enhanced!</strong></p>
-        </div>
-        """, unsafe_allow_html=True)
-    else:
-        st.markdown(f"""
-        <div class="status-box">
-            <h3>{kill_zone['name']}</h3>
-            <p>{kill_zone['description']}</p>
-        </div>
-        """, unsafe_allow_html=True)
-
-    # Sidebar Navigation with Alert Badge
-    alert_count = len([a for a in st.session_state.sent_alerts 
-                      if (datetime.now() - datetime.fromisoformat(a.get('sent_time', '2000-01-01'))).days < 1])
+    st.markdown(f"""
+    <div class="{status_class}">
+        <h3 style="margin: 0; color: white !important;">{kill_zone['name']}</h3>
+        <p style="margin: 5px 0 0 0; color: rgba(255,255,255,0.8);">
+            Priority: {kill_zone['priority']}/5 | Multiplier: {kill_zone['multiplier']}x | 
+            Status: {'🟢 ACTIVE' if kill_zone['active'] else '⚪ INACTIVE'}
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
     
-    st.sidebar.title("Navigation")
-    page = st.sidebar.radio("Select Page", [
-        f"Market Analysis {'🔔' if alert_count > 0 else ''}",
-        "Watchlist",
-        "Portfolio Tracker",
-        "Alert Dashboard",
-        "Alert History",
-        "Alert Settings",
-        "Backtesting",
-        "Correlation Matrix",
-        "Settings"
-    ])
-
-    # Remove emoji from page name for comparison
-    page_clean = page.replace('🔔', '').strip()
-
-    # PAGE: MARKET ANALYSIS (Enhanced with auto-alerts)
-    if page_clean == "Market Analysis":
-        st.header("Real-Time Market Analysis with Auto-Alerts")
+    st.markdown("---")
+    
+    # Sidebar - Filters
+    with st.sidebar:
+        st.image("https://img.icons8.com/fluency/96/000000/artificial-intelligence.png", width=80)
+        st.title("⚙️ Control Panel")
         
-        # Display alert status
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            st.metric("Today's Alerts", alert_count)
-        with col2:
-            threshold = st.session_state.preferences.get('alert_threshold', 90)
-            st.metric("Alert Threshold", f"{threshold}%")
-        with col3:
-            enabled_channels = sum(1 for service in st.session_state.preferences['notification_services'].values() 
-                                  if service.get('enabled', False))
-            st.metric("Active Channels", enabled_channels)
-
-        asset_type = st.selectbox(
-            "Choose Asset Class",
-            ["Indian Stocks (Nifty 50)", "Cryptocurrencies", "Forex Pairs"]
+        st.markdown("### 📂 Asset Selection")
+        asset_types = st.multiselect(
+            "Select Asset Types",
+            ['Indian Stocks', 'Cryptocurrencies', 'Forex'],
+            default=['Indian Stocks', 'Cryptocurrencies']
         )
-
-        col1, col2 = st.columns(2)
-        with col1:
-            analyze_count = st.slider("Assets to Analyze", 5, 30, 10)
-        with col2:
-            show_ict_overlays = st.checkbox("Show ICT Overlays", value=True)
-            auto_send_alerts = st.checkbox("Auto-send High Confidence Alerts", value=True)
-
-        if st.button("Start Analysis with Alerts", use_container_width=True):
-            if "Stocks" in asset_type:
-                st.subheader("Nifty 50 Stock Analysis with Alert Monitoring")
-                if analyze_count < len(NIFTY_50):
-                    assets_to_analyze = [NIFTY_50[analyze_count]]  # List bana do agar single stock analyze kar rahe ho
-                else:
-                    st.error("All stocks analyzed! Resetting to start...")
-                    st.session_state.analyze_count = 0
-                    assets_to_analyze = [NIFTY_50[0]]
-
-                progress_bar = st.progress(0)
-                status_text = st.empty()
-
-                results = []
-                alerts_sent = 0
-                
-                for i, ticker in enumerate(assets_to_analyze):
-                    status_text.text(f"Analyzing {ticker}... ({i + 1}/{len(assets_to_analyze)})")
-                    data = fetch_stock_data(ticker)
-                    
-                    if data:
-                        analysis = analyze_asset(data, 'Stock', kill_zone)
-                        results.append(analysis)
-
-                        # Check and send alerts if confidence is high
-                        if auto_send_alerts and analysis['confidence'] >= st.session_state.preferences.get('alert_threshold', 90):
-                            alert_sent = check_and_send_alerts(data, analysis)
-                            if alert_sent:
-                                alerts_sent += 1
-                                st.success(f"✅ Alert sent for {ticker} ({analysis['confidence']}% confidence)")
-
-                    progress_bar.progress((i + 1) / len(assets_to_analyze))
-                    time.sleep(0.2)
-
-                status_text.empty()
-                progress_bar.empty()
-
-                if results:
-                    results_sorted = sorted(results, key=lambda x: x['combined_score'], reverse=True)
-
-                    st.subheader(f"Top 10 Opportunities (Alerts Sent: {alerts_sent})")
-
-                    # Enhanced dataframe with alert indicators
-                    df_data = []
-                    for r in results_sorted[:10]:
-                        alert_indicator = "🔔" if r['confidence'] >= st.session_state.preferences.get('alert_threshold', 90) else ""
-                        df_data.append({
-                            'Symbol': f"{r['symbol']} {alert_indicator}",
-                            'Name': r['name'][:25],
-                            'Price': f"₹{r['price']:.2f}",
-                            'Change': f"{r['price_change_24h']:.2f}%",
-                            'Score': f"{r['combined_score']:.1f}",
-                            'Signal': r['signal'],
-                            'Confidence': f"{r['confidence']}%",
-                            'Risk': f"{r['risk']}/10"
-                        })
-
-                    df = pd.DataFrame(df_data)
-                    st.dataframe(df, use_container_width=True, height=400)
-
-                    # Top pick with detailed trade parameters
-                    st.subheader("📊 Detailed Analysis - Top Pick")
-                    top_pick = results_sorted[0]
-                    
-                    if top_pick['confidence'] >= st.session_state.preferences.get('alert_threshold', 90):
+        
+        st.markdown("### 🎯 Filters")
+        min_score = st.slider("Minimum Combined Score", 0, 100, 60)
+        
+        signal_filter = st.multiselect(
+            "Signal Type",
+            ['🟢 STRONG BUY', '🟢 BUY', '🟡 HOLD', '🔴 SELL', '🔴 STRONG SELL', '⚪ WAIT'],
+            default=['🟢 STRONG BUY', '🟢 BUY']
+        )
+        
+        max_risk = st.slider("Maximum Risk Level", 1, 10, 7)
+        
+        st.markdown("### 📊 Display Options")
+        top_n = st.number_input("Top N Assets", min_value=10, max_value=100, value=21, step=1)
+        show_charts = st.checkbox("Show Candlestick Charts", value=True)
+        
+        st.markdown("---")
+        st.markdown("### 🔄 Data Refresh")
+        if st.button("🔄 Refresh Data Now", use_container_width=True):
+            st.cache_data.clear()
+            st.rerun()
+        
+        st.markdown("---")
+        st.markdown("**💡 Pro Tip:** Focus on STRONG BUY signals during active kill zones!")
+    
+    # Data Collection Progress
+    with st.spinner("🔍 Scanning Markets..."):
+        all_assets = []
+        
+        # Progress tracking
+        total_assets = 0
+        if 'Indian Stocks' in asset_types:
+            total_assets += len(NIFTY_50)
+        if 'Cryptocurrencies' in asset_types:
+            total_assets += len(TOP_50_CRYPTO)
+        if 'Forex' in asset_types:
+            total_assets += len(FOREX_PAIRS[:20])
+        
+        progress_bar = st.progress(0)
+        status_text = st.empty()
+        processed = 0
+        
+        # Fetch Indian Stocks
+        if 'Indian Stocks' in asset_types:
+            status_text.text("📈 Fetching Indian Stocks...")
+            for ticker in NIFTY_50:
+                data = fetch_stock_data(ticker)
+                if data:
+                    analyzed = analyze_asset(data, 'Stock', kill_zone)
+                    all_assets.append(analyzed)
+                processed += 1
+                progress_bar.progress(processed / total_assets)
+                time.sleep(0.1)  # Rate limiting
+        
+        # Fetch Cryptocurrencies
+        if 'Cryptocurrencies' in asset_types:
+            status_text.text("🪙 Fetching Cryptocurrencies...")
+            for coin in TOP_50_CRYPTO:
+                data = fetch_crypto_data(coin)
+                if data:
+                    analyzed = analyze_asset(data, 'Crypto', kill_zone)
+                    all_assets.append(analyzed)
+                processed += 1
+                progress_bar.progress(processed / total_assets)
+                time.sleep(0.1)
+        
+        # Fetch Forex
+        if 'Forex' in asset_types:
+            status_text.text("💱 Fetching Forex Pairs...")
+            for pair in FOREX_PAIRS[:20]:
+                data = fetch_forex_data(pair)
+                if data:
+                    analyzed = analyze_asset(data, 'Forex', kill_zone)
+                    all_assets.append(analyzed)
+                processed += 1
+                progress_bar.progress(processed / total_assets)
+                time.sleep(0.1)
+        
+        progress_bar.empty()
+        status_text.empty()
+    
+    if not all_assets:
+        st.error("❌ No data available. Please check your internet connection.")
+        return
+    
+    # Create DataFrame
+    df = pd.DataFrame(all_assets)
+    
+    # Apply filters
+    df_filtered = df[
+        (df['combined_score'] >= min_score) &
+        (df['signal'].isin(signal_filter)) &
+        (df['risk'] <= max_risk)
+    ].sort_values('combined_score', ascending=False).reset_index(drop=True)
+    
+    df_filtered['rank'] = range(1, len(df_filtered) + 1)
+    
+    # Summary Metrics
+    st.markdown("## 📊 Market Overview")
+    col1, col2, col3, col4, col5 = st.columns(5)
+    
+    with col1:
+        st.metric("Total Assets Scanned", len(df))
+    with col2:
+        strong_buy_count = len(df[df['signal'] == '🟢 STRONG BUY'])
+        st.metric("Strong Buy Signals", strong_buy_count)
+    with col3:
+        avg_score = df['combined_score'].mean()
+        st.metric("Avg Combined Score", f"{avg_score:.1f}")
+    with col4:
+        bullish_count = len(df[df['trend'] == 'BULLISH'])
+        st.metric("Bullish Assets", bullish_count)
+    with col5:
+        high_conf = len(df[df['confidence'] >= 80])
+        st.metric("High Confidence (>80)", high_conf)
+    
+    st.markdown("---")
+    
+    # TOP 21 RECOMMENDATIONS
+    st.markdown("## 🏆 TOP 21 RECOMMENDED ASSETS")
+    st.markdown("**Premium picks based on ICT analysis + Fundamentals**")
+    
+    top_21 = df_filtered.head(top_n)
+    
+    if len(top_21) == 0:
+        st.warning("⚠️ No assets match your filter criteria. Try adjusting the filters.")
+    else:
+        # Display cards for top 21
+        for i in range(0, len(top_21), 3):
+            cols = st.columns(3)
+            for j in range(3):
+                if i + j < len(top_21):
+                    asset = top_21.iloc[i + j]
+                    with cols[j]:
+                        signal_class = (
+                            'signal-strong-buy' if 'STRONG BUY' in asset['signal']
+                            else 'signal-buy' if 'BUY' in asset['signal']
+                            else 'signal-hold' if 'HOLD' in asset['signal']
+                            else 'signal-sell'
+                        )
+                        
                         st.markdown(f"""
-                        <div class="alert-box">
-                            <h4>🚨 HIGH CONFIDENCE SIGNAL DETECTED!</h4>
-                            <p>This signal meets the alert threshold ({st.session_state.preferences.get('alert_threshold', 90)}% confidence). 
-                            Alerts have been sent to configured channels.</p>
+                        <div style='background: rgba(26, 32, 44, 0.8); padding: 20px; border-radius: 10px; 
+                                    border-left: 4px solid {kill_zone['color']}; margin-bottom: 15px;'>
+                            <h3 style='margin: 0; color: #00d4ff !important;'>#{asset['rank']} {asset['symbol']}</h3>
+                            <p style='margin: 5px 0; color: #94a3b8; font-size: 14px;'>{asset['name'][:30]}</p>
+                            <div style='margin: 10px 0;'>
+                                <span class='{signal_class}'>{asset['signal']}</span>
+                            </div>
+                            <div style='margin-top: 10px;'>
+                                <p style='margin: 3px 0;'><strong>Score:</strong> {asset['combined_score']}/100</p>
+                                <p style='margin: 3px 0;'><strong>Trend:</strong> {asset['trend']}</p>
+                                <p style='margin: 3px 0;'><strong>Risk:</strong> {asset['risk']}/10</p>
+                                <p style='margin: 3px 0;'><strong>Type:</strong> {asset['asset_type']}</p>
+                            </div>
                         </div>
                         """, unsafe_allow_html=True)
-
-                    # Calculate trade parameters for top pick
-                    trade_params = calculate_trade_parameters(top_pick, top_pick['signal'])
+        
+        st.markdown("---")
+        
+        # DETAILED TABLE
+        st.markdown("## 📋 Detailed Analysis Table")
+        
+        # Prepare display dataframe
+        display_cols = [
+            'rank', 'symbol', 'name', 'asset_type', 'signal', 'combined_score',
+            'technical_score', 'fundamental_score', 'trend', 'risk', 'confidence',
+            'price_change_24h'
+        ]
+        
+        display_df = top_21[display_cols].copy()
+        display_df.columns = [
+            'Rank', 'Symbol', 'Name', 'Type', 'Signal', 'Combined Score',
+            'Technical', 'Fundamental', 'Trend', 'Risk', 'Confidence %', '24h Change %'
+        ]
+        
+        # Format numbers
+        display_df['Combined Score'] = display_df['Combined Score'].apply(lambda x: f"{x:.1f}")
+        display_df['Technical'] = display_df['Technical'].apply(lambda x: f"{x:.1f}")
+        display_df['Fundamental'] = display_df['Fundamental'].apply(lambda x: f"{x:.1f}")
+        display_df['Confidence %'] = display_df['Confidence %'].apply(lambda x: f"{x:.1f}%")
+        display_df['24h Change %'] = display_df['24h Change %'].apply(lambda x: f"{x:+.2f}%")
+        
+        st.dataframe(
+            display_df,
+            use_container_width=True,
+            height=600
+        )
+        
+        # Download CSV
+        csv = df_filtered.to_csv(index=False)
+        st.download_button(
+            label="📥 Download Full Analysis (CSV)",
+            data=csv,
+            file_name=f"ICT_Analysis_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+            mime="text/csv"
+        )
+        
+        st.markdown("---")
+        
+        # CANDLESTICK CHARTS
+        if show_charts and 'Indian Stocks' in asset_types:
+            st.markdown("## 📈 Interactive Charts - Top 5 Stocks")
+            
+            top_stocks = df_filtered[df_filtered['asset_type'] == 'Stock'].head(5)
+            
+            for idx, stock in top_stocks.iterrows():
+                with st.expander(f"📊 {stock['symbol']} - {stock['name']}", expanded=(idx == top_stocks.index[0])):
+                    col1, col2 = st.columns([3, 1])
                     
-                    col1, col2, col3, col4, col5 = st.columns(5)
                     with col1:
-                        st.metric("Confidence", f"{top_pick['confidence']:.1f}%")
+                        ticker = stock['symbol'] if '.NS' in stock['symbol'] else f"{stock['symbol']}.NS"
+                        chart = create_candlestick_chart(ticker, period="3mo")
+                        if chart:
+                            st.plotly_chart(chart, use_container_width=True)
+                    
                     with col2:
-                        st.metric("Entry", f"₹{trade_params['entry_price']:.2f}")
-                    with col3:
-                        st.metric("Stop Loss", f"₹{trade_params['stop_loss']:.2f}")
-                    with col4:
-                        st.metric("Take Profit", f"₹{trade_params['take_profit']:.2f}")
-                    with col5:
-                        st.metric("R:R", f"1:{trade_params['risk_reward']:.1f}")
-
-                    # Trade action buttons
-                    col1, col2, col3, col4 = st.columns(4)
-                    with col1:
-                        if st.button("📝 Add to Watchlist", use_container_width=True):
-                            if add_to_watchlist(top_pick):
-                                st.success("Added to watchlist")
-                    with col2:
-                        if st.button("📤 Send Custom Alert", use_container_width=True):
-                            custom_alert = create_trade_alert(top_pick, top_pick)
-                            notification_manager.config = st.session_state.preferences['notification_services']
-                            notification_manager.send_multichannel_alert(custom_alert)
-                            st.success("Custom alert sent!")
-                    with col3:
-                        if st.button("📊 View Chart", use_container_width=True):
-                            chart = create_advanced_chart(top_pick['symbol'] + '.NS', show_ict=show_ict_overlays)
-                            if chart:
-                                st.plotly_chart(chart, use_container_width=True)
-                    with col4:
-                        if st.button("💾 Export Report", use_container_width=True):
-                            report = {
-                                'analysis': top_pick,
-                                'trade_parameters': trade_params,
-                                'timestamp': datetime.now().isoformat()
-                            }
-                            json_str = json.dumps(report, indent=2)
-                            st.download_button(
-                                "Download JSON",
-                                json_str,
-                                f"trade_report_{top_pick['symbol']}_{datetime.now().strftime('%Y%m%d_%H%M')}.json",
-                                "application/json"
-                            )
-
-                    # Display detailed trade parameters
-                    with st.expander("📋 Complete Trade Setup", expanded=True):
-                        col1, col2 = st.columns(2)
-                        with col1:
-                            st.write("**Position Sizing**")
-                            st.metric("Position Size", f"{trade_params['position_size']:.2f} units")
-                            st.metric("Risk per Trade", f"₹{trade_params['risk_amount']:.2f}")
-                            st.metric("Risk %", f"{trade_params['risk_per_trade_pct']:.1f}%")
-                            
-                        with col2:
-                            st.write("**Trade Parameters**")
-                            st.metric("Stop Loss %", f"{trade_params['stop_loss_pct']:.1f}%")
-                            st.metric("Take Profit %", f"{trade_params['take_profit_pct']:.1f}%")
-                            st.metric("Risk/Reward", f"1:{trade_params['risk_reward']:.1f}")
+                        st.markdown("### 📊 Key Metrics")
+                        st.metric("Combined Score", f"{stock['combined_score']:.1f}/100")
+                        st.metric("Signal", stock['signal'])
+                        st.metric("Risk Level", f"{stock['risk']}/10")
+                        st.metric("Confidence", f"{stock['confidence']:.1f}%")
                         
-                        st.write("**Analysis Summary**")
-                        st.info(generate_analysis_summary(top_pick, top_pick.get('ict_scores', {})))
-
-    # PAGE: ALERT DASHBOARD
-    elif page_clean == "Alert Dashboard":
-        display_realtime_alerts()
-
-    # PAGE: ALERT HISTORY
-    elif page_clean == "Alert History":
-        display_sent_alerts()
-
-    # PAGE: ALERT SETTINGS
-    elif page_clean == "Alert Settings":
-        display_alert_settings()
-
-    # OTHER PAGES (keep original functionality)
-    elif page_clean == "Watchlist":
-        display_watchlist()
+                        st.markdown("### 🎯 ICT Analysis")
+                        ict = stock['ict_scores']
+                        for concept, score in list(ict.items())[:5]:
+                            st.progress(score / 100, text=f"{concept}: {score:.1f}")
         
-    elif page_clean == "Portfolio Tracker":
-        display_portfolio()
+        st.markdown("---")
         
-    elif page_clean == "Backtesting":
-        display_backtesting()
+        # SECTOR ANALYSIS (for stocks)
+        if 'Indian Stocks' in asset_types:
+            st.markdown("## 🏭 Sector Performance")
+            
+            stock_df = df_filtered[df_filtered['asset_type'] == 'Stock']
+            if len(stock_df) > 0:
+                sector_avg = stock_df.groupby('sector').agg({
+                    'combined_score': 'mean',
+                    'symbol': 'count'
+                }).round(1)
+                sector_avg.columns = ['Avg Score', 'Count']
+                sector_avg = sector_avg.sort_values('Avg Score', ascending=False)
+                
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    st.dataframe(sector_avg, use_container_width=True)
+                
+                with col2:
+                    fig = go.Figure(data=[
+                        go.Bar(
+                            x=sector_avg.index,
+                            y=sector_avg['Avg Score'],
+                            marker_color='#3b82f6',
+                            text=sector_avg['Avg Score'],
+                            textposition='auto'
+                        )
+                    ])
+                    fig.update_layout(
+                        title="Average Score by Sector",
+                        template='plotly_dark',
+                        height=400,
+                        paper_bgcolor='rgba(26, 32, 44, 0.8)',
+                        plot_bgcolor='rgba(26, 32, 44, 0.8)',
+                        font=dict(color='#e2e8f0')
+                    )
+                    st.plotly_chart(fig, use_container_width=True)
         
-    elif page_clean == "Correlation Matrix":
-        st.subheader("Asset Correlation Analysis")
-        # ... (keep original correlation matrix code)
+        st.markdown("---")
         
-    elif page_clean == "Settings":
-        st.subheader("User Settings & Preferences")
-        # ... (keep original settings code, but add link to alert settings)
-
-    # Enhanced sidebar with alert status
-    st.sidebar.markdown("---")
-    st.sidebar.subheader("Alert System Status")
+        # RISK DISTRIBUTION
+        st.markdown("## ⚠️ Risk Distribution")
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            risk_counts = df_filtered['risk'].value_counts().sort_index()
+            fig = go.Figure(data=[
+                go.Bar(
+                    x=risk_counts.index,
+                    y=risk_counts.values,
+                    marker_color=['#10b981' if x <= 3 else '#f59e0b' if x <= 6 else '#ef4444' 
+                                  for x in risk_counts.index],
+                    text=risk_counts.values,
+                    textposition='auto'
+                )
+            ])
+            fig.update_layout(
+                title="Assets by Risk Level",
+                xaxis_title="Risk Level",
+                yaxis_title="Count",
+                template='plotly_dark',
+                height=400,
+                paper_bgcolor='rgba(26, 32, 44, 0.8)',
+                plot_bgcolor='rgba(26, 32, 44, 0.8)',
+                font=dict(color='#e2e8f0')
+            )
+            st.plotly_chart(fig, use_container_width=True)
+        
+        with col2:
+            signal_counts = df_filtered['signal'].value_counts()
+            fig = go.Figure(data=[
+                go.Pie(
+                    labels=signal_counts.index,
+                    values=signal_counts.values,
+                    marker=dict(
+                        colors=['#10b981', '#34d399', '#fbbf24', '#f87171', '#ef4444', '#9ca3af']
+                    ),
+                    hole=0.4
+                )
+            ])
+            fig.update_layout(
+                title="Signal Distribution",
+                template='plotly_dark',
+                height=400,
+                paper_bgcolor='rgba(26, 32, 44, 0.8)',
+                plot_bgcolor='rgba(26, 32, 44, 0.8)',
+                font=dict(color='#e2e8f0')
+            )
+            st.plotly_chart(fig, use_container_width=True)
     
-    # Quick alert status
-    enabled_services = []
-    for service_name, config in st.session_state.preferences['notification_services'].items():
-        if config.get('enabled', False):
-            enabled_services.append(service_name.capitalize())
-    
-    if enabled_services:
-        st.sidebar.success(f"✅ Alerts active via: {', '.join(enabled_services)}")
-    else:
-        st.sidebar.warning("⚠️ No alert channels configured")
-    
-    st.sidebar.metric("Today's Alerts", alert_count)
-    st.sidebar.metric("Confidence Threshold", f"{st.session_state.preferences.get('alert_threshold', 90)}%")
-    
-    # Quick test button
-    if st.sidebar.button("Test Alert System", use_container_width=True):
-        test_alert = {
-            'type': 'trade_signal',
-            'symbol': 'TEST',
-            'signal': 'TEST SIGNAL',
-            'confidence': 95,
-            'current_price': 100.00,
-            'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        }
-        notification_manager.config = st.session_state.preferences['notification_services']
-        results = notification_manager.send_multichannel_alert(test_alert)
-        st.sidebar.success(f"Test sent to {sum(1 for r in results.values() if r)} channels")
-
-    st.sidebar.markdown("---")
-    st.sidebar.info(f"""
-    **Alert System**: {"Active" if any(s.get('enabled') for s in st.session_state.preferences['notification_services'].values()) else "Inactive"}
-    
-    **Last Alert**: {st.session_state.sent_alerts[-1]['timestamp'] if st.session_state.sent_alerts else 'None'}
-    
-    **Kill Zone**: {kill_zone['name']}
-    
-    **Time**: {datetime.now().strftime("%H:%M:%S")}
-    """)
-
-    st.sidebar.markdown("---")
-    st.sidebar.success("**ICT Analyzer Pro** - Enhanced Alert Edition")
-
-
-import streamlit as st
-
-# Session state initialize karo (ye app ke starting mein daal do)
-if 'analyze_count' not in st.session_state:
-    st.session_state.analyze_count = 0
-
-analyze_count = st.session_state.analyze_count
-
+    # Footer
+    st.markdown("---")
+    st.markdown("""
+    <div style='text-align: center; padding: 20px; color: #94a3b8;'>
+        <p><strong>ICT Advanced Analyzer 2026</strong></p>
+        <p>Professional Trading Tool | Real-Time Analysis | Multi-Asset Support</p>
+        <p style='font-size: 12px;'>⚠️ Disclaimer: This tool is for educational purposes only. Always do your own research before trading.</p>
+    </div>
+    """, unsafe_allow_html=True)
 
 if __name__ == "__main__":
     main()
