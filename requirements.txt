@@ -6,3 +6,15 @@ yfinance
 requests
 bcrypt
 pyotp
+qrcode[pil]
+Pillow
+sqlite3  # ये built-in है, लेकिन safe side लिख दो
+warnings  # built-in
+hashlib  # built-in
+secrets  # built-in
+smtplib  # built-in
+json  # built-in
+datetime  # built-in
+time  # built-in
+io  # built-in
+base64  # built-in
