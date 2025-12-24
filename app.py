@@ -4,14 +4,25 @@ import numpy as np
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import yfinance as yf
-from datetime import datetime, timedelta, time as dtime
+from datetime import datetime, timedelta
 import time
 import requests
 from typing import Dict, List, Tuple
 import json
 import warnings
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+import threading
+import schedule
+import asyncio
+import websockets
+import aiohttp
+from twilio.rest import Client
+import discord
 
 warnings.filterwarnings('ignore')
+
 
 NIFTY_50 = [
     "ADANIPORTS.NS", "ASIANPAINT.NS", "AXISBANK.NS", "BAJAJ-AUTO.NS",
@@ -26,24 +37,126 @@ NIFTY_50 = [
     "SBILIFE.NS", "SBIN.NS", "SUNPHARMA.NS", "TATACONSUM.NS",
     "TATAMOTORS.NS", "TATASTEEL.NS", "TCS.NS", "TECHM.NS",
     "TITAN.NS", "TRENT.NS", "ULTRACEMCO.NS", "WIPRO.NS",
-    "SHRIRAMFIN.NS"
+    "BAJAJFINSV.NS", "SHRIRAMFIN.NS"  # Latest additions as of Dec 2025 (Trent & Shriram Finance common hain ab)
 ]
 
+
 # ═══════════════════════════════════════════════════════════════════════════════
-# CONFIGURATION
+# ENHANCED NOTIFICATION SYSTEM CONFIGURATION
 # ═══════════════════════════════════════════════════════════════════════════════
 
+# Configuration dictionary for notification services
+
+from datetime import datetime, time as dtime, timedelta
+
+def get_kill_zone() -> Dict:
+    """
+    Current ICT Kill Zone ko detect karta hai IST time ke hisaab se.
+    """
+    # Current time in IST
+    ist_offset = timedelta(hours=5, minutes=30)
+    now_utc = datetime.utcnow()
+    current_time_ist = now_utc + ist_offset
+    current_timet = dtime(current_time_ist.hour, current_time_ist.minute)
+
+    # Kill Zones ki list (IST time mein)
+    zones = [
+        {
+            "name": "London Open Kill Zone",
+            "start": dtime(13, 0),
+            "end": dtime(16, 0),
+            "multiplier": 2.5,
+            "priority": 5,
+            "description": "Sabse high liquidity aur volatility wala time",
+            "active": False
+        },
+        {
+            "name": "New York Open Kill Zone",
+            "start": dtime(18, 30),
+            "end": dtime(21, 30),
+            "multiplier": 2.0,
+            "priority": 4,
+            "description": "Strong moves aur institutional activity",
+            "active": False
+        },
+        {
+            "name": "London Close Kill Zone",
+            "start": dtime(20, 30),
+            "end": dtime(22, 30),
+            "multiplier": 1.8,
+            "priority": 3,
+            "description": "Position squaring aur reversals ka time",
+            "active": False
+        },
+        {
+            "name": "Asian Kill Zone",
+            "start": dtime(5, 30),
+            "end": dtime(8, 30),
+            "multiplier": 1.2,
+            "priority": 2,
+            "description": "Low volatility, range trading",
+            "active": False
+        }
+    ]
+
+    default = {
+        "name": "No Active Kill Zone",
+        "active": False,
+        "multiplier": 1.0,
+        "priority": 0,
+        "description": "Normal market conditions"
+    }
+
+    for zone in zones:
+        if zone["start"] <= current_timet <= zone["end"]:
+            zone["active"] = True
+            return zone
+
+    return default
+
+
 NOTIFICATION_CONFIG = {
-    'email': {'enabled': False, 'smtp_server': 'smtp.gmail.com', 'smtp_port': 587,
-              'sender_email': '', 'sender_password': '', 'recipients': []},
-    'telegram': {'enabled': False, 'bot_token': '', 'chat_id': ''},
-    'whatsapp': {'enabled': False, 'twilio_sid': '', 'twilio_token': '', 
-                 'twilio_number': '', 'recipients': []},
-    'sms': {'enabled': False, 'twilio_sid': '', 'twilio_token': '',
-            'twilio_number': '', 'recipients': []},
-    'discord': {'enabled': False, 'webhook_url': ''},
-    'push': {'enabled': False, 'onesignal_app_id': '', 'onesignal_api_key': ''}
+    'email': {
+        'enabled': False,
+        'smtp_server': 'smtp.gmail.com',
+        'smtp_port': 587,
+        'sender_email': '',
+        'sender_password': '',
+        'recipients': []
+    },
+    'telegram': {
+        'enabled': False,
+        'bot_token': '',
+        'chat_id': ''
+    },
+    'whatsapp': {
+        'enabled': False,
+        'twilio_sid': '',
+        'twilio_token': '',
+        'twilio_number': '',
+        'recipients': []
+    },
+    'sms': {
+        'enabled': False,
+        'twilio_sid': '',
+        'twilio_token': '',
+        'twilio_number': '',
+        'recipients': []
+    },
+    'discord': {
+        'enabled': False,
+        'webhook_url': ''
+    },
+    'push': {
+        'enabled': False,
+        'onesignal_app_id': '',
+        'onesignal_api_key': ''
+    }
 }
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# ICT PROFESSIONAL ANALYZER - CLEAN DARK THEME WITH ALERT SYSTEM
+# ═══════════════════════════════════════════════════════════════════════════════
 
 st.set_page_config(
     page_title="ICT Pro Analyzer with Alerts",
@@ -52,7 +165,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Professional Dark Theme CSS
+# Professional Dark Theme CSS with Alert Styling
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
@@ -77,12 +190,85 @@ st.markdown("""
         border-radius: 4px;
         border: 1px solid #1a1a1a;
     }
+    
+    [data-testid="stMetricLabel"] {
+        color: #999999;
+        font-size: 13px;
+        font-weight: 500;
+    }
+    
+    [data-testid="stMetricValue"] {
+        color: #ffffff;
+        font-size: 24px;
+        font-weight: 600;
+    }
 
     h1, h2, h3, h4, h5, h6 {
         color: #ffffff !important;
         font-weight: 600;
+        letter-spacing: -0.02em;
+    }
+    
+    h1 {
+        font-size: 32px;
+        margin-bottom: 8px;
+    }
+    
+    h2 {
+        font-size: 24px;
+        margin-bottom: 16px;
+    }
+    
+    h3 {
+        font-size: 18px;
+        margin-bottom: 12px;
     }
 
+    .dataframe {
+        background-color: #0f0f0f !important;
+        color: #ffffff !important;
+        border: 1px solid #1a1a1a;
+        border-radius: 4px;
+    }
+
+    .dataframe thead tr th {
+        background-color: #0a0a0a !important;
+        color: #ffffff !important;
+        font-weight: 600;
+        border-bottom: 1px solid #1a1a1a;
+        padding: 12px;
+        font-size: 13px;
+    }
+    
+    .dataframe tbody tr td {
+        border-bottom: 1px solid #1a1a1a;
+        padding: 12px;
+        font-size: 14px;
+    }
+
+    .stButton>button {
+        background-color: #ffffff;
+        color: #000000;
+        border: none;
+        border-radius: 4px;
+        padding: 10px 20px;
+        font-weight: 600;
+        font-size: 14px;
+        transition: all 0.2s;
+    }
+    
+    .stButton>button:hover {
+        background-color: #e6e6e6;
+    }
+
+    .status-box {
+        background-color: #0f0f0f;
+        border: 1px solid #1a1a1a;
+        padding: 16px;
+        border-radius: 4px;
+        margin: 12px 0;
+    }
+    
     .alert-box {
         background-color: #1a0000;
         border: 2px solid #ff4444;
@@ -98,14 +284,56 @@ st.markdown("""
         100% { border-color: #ff4444; }
     }
     
-    .status-box {
-        background-color: #0f0f0f;
-        border: 1px solid #1a1a1a;
-        padding: 16px;
-        border-radius: 4px;
-        margin: 12px 0;
+    .status-box h3 {
+        margin: 0 0 8px 0;
+        font-size: 16px;
+    }
+    
+    .status-box p {
+        margin: 0;
+        color: #999999;
+        font-size: 14px;
     }
 
+    .info-text {
+        color: #999999;
+        font-size: 14px;
+        line-height: 1.6;
+    }
+    
+    .stSelectbox label, .stSlider label, .stRadio label, .stCheckbox label {
+        color: #ffffff;
+        font-weight: 500;
+        font-size: 14px;
+    }
+    
+    .stTextInput input {
+        background-color: #0f0f0f;
+        border: 1px solid #1a1a1a;
+        color: #ffffff;
+        border-radius: 4px;
+    }
+    
+    .stSelectbox select {
+        background-color: #0f0f0f;
+        border: 1px solid #1a1a1a;
+        color: #ffffff;
+    }
+    
+    hr {
+        border-color: #1a1a1a;
+    }
+    
+    .stProgress > div > div {
+        background-color: #ffffff;
+    }
+    
+    [data-testid="stExpander"] {
+        background-color: #0f0f0f;
+        border: 1px solid #1a1a1a;
+        border-radius: 4px;
+    }
+    
     .trade-card {
         background: linear-gradient(135deg, #0f0f0f 0%, #1a1a1a 100%);
         border: 1px solid #333333;
@@ -121,8 +349,22 @@ st.markdown("""
     .trade-card.sell {
         border-left: 5px solid #ff4444;
     }
+    
+    .notification-badge {
+        background-color: #ff4444;
+        color: white;
+        border-radius: 50%;
+        width: 20px;
+        height: 20px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 12px;
+        margin-left: 5px;
+    }
 </style>
 """, unsafe_allow_html=True)
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # SESSION STATE INITIALIZATION WITH ALERT SYSTEM
 # ═══════════════════════════════════════════════════════════════════════════════
