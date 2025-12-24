@@ -1422,13 +1422,9 @@ def main():
         
         # ADVANCED ANALYSIS SECTION
         if len(df_filtered) > 0:
-            # Select asset for detailed view
-            st.markdown("## 🔬 Advanced Analysis")
-            
-            selected_symbol = st.selectbox(
-                "Select Asset for Detailed Analysis",
-                options=df_filtered['symbol'].tolist(),
-                index=0
+    bullish_pct = f"{bullish_count / len(df_filtered):.0%}"
+else:
+    bullish_pct = "N/A"
             )
             
             selected_asset = df_filtered[df_filtered['symbol'] == selected_symbol].iloc[0]
