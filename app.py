@@ -1363,7 +1363,12 @@ def main():
         if st.button("Start Analysis with Alerts", use_container_width=True):
             if "Stocks" in asset_type:
                 st.subheader("Nifty 50 Stock Analysis with Alert Monitoring")
-                assets_to_analyze = NIFTY_50[:analyze_count]
+                if analyze_count < len(NIFTY_50):
+                    assets_to_analyze = [NIFTY_50[analyze_count]]  # List bana do agar single stock analyze kar rahe ho
+                else:
+                    st.error("All stocks analyzed! Resetting to start...")
+                    st.session_state.analyze_count = 0
+                    assets_to_analyze = [NIFTY_50[0]]
 
                 progress_bar = st.progress(0)
                 status_text = st.empty()
