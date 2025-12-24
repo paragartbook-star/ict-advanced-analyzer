@@ -78,205 +78,69 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Professional Dark Theme CSS with Alert Styling
+# Custom CSS - TradingView Dark Theme
 st.markdown("""
 <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
-    
-    * {
-        font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-    }
-    
+    /* Main Background - Deep TradingView Black */
     .stApp {
-        background-color: #000000;
-        color: #ffffff;
+        background: #0d0d0d !important;
     }
-
+    
+    /* Sidebar - TradingView Style */
     [data-testid="stSidebar"] {
-        background-color: #0a0a0a;
-        border-right: 1px solid #1a1a1a;
+        background: #131722 !important;
+        border-right: 1px solid #2a2e39 !important;
     }
-
+    
+    /* Metric Cards - TradingView Cards */
     [data-testid="stMetric"] {
-        background-color: #0f0f0f;
-        padding: 16px;
+        background: #1e222d !important;
+        padding: 15px;
         border-radius: 4px;
-        border: 1px solid #1a1a1a;
+        border: 1px solid #2a2e39;
     }
     
-    [data-testid="stMetricLabel"] {
-        color: #999999;
-        font-size: 13px;
-        font-weight: 500;
-    }
-    
-    [data-testid="stMetricValue"] {
-        color: #ffffff;
-        font-size: 24px;
+    /* Headers - TradingView White Text */
+    h1, h2, h3 {
+        color: #d1d4dc !important;
         font-weight: 600;
     }
-
-    h1, h2, h3, h4, h5, h6 {
-        color: #ffffff !important;
-        font-weight: 600;
-        letter-spacing: -0.02em;
-    }
     
-    h1 {
-        font-size: 32px;
-        margin-bottom: 8px;
-    }
-    
-    h2 {
-        font-size: 24px;
-        margin-bottom: 16px;
-    }
-    
-    h3 {
-        font-size: 18px;
-        margin-bottom: 12px;
-    }
-
+    /* Tables - TradingView Style */
     .dataframe {
-        background-color: #0f0f0f !important;
-        color: #ffffff !important;
-        border: 1px solid #1a1a1a;
+        background: #1e222d !important;
+        color: #d1d4dc !important;
+        border: 1px solid #2a2e39;
         border-radius: 4px;
     }
-
+    
     .dataframe thead tr th {
-        background-color: #0a0a0a !important;
-        color: #ffffff !important;
+        background: #131722 !important;
+        color: #787b86 !important;
         font-weight: 600;
-        border-bottom: 1px solid #1a1a1a;
-        padding: 12px;
-        font-size: 13px;
+        border-bottom: 1px solid #2a2e39;
+        text-transform: uppercase;
+        font-size: 11px;
     }
     
-    .dataframe tbody tr td {
-        border-bottom: 1px solid #1a1a1a;
-        padding: 12px;
-        font-size: 14px;
+    .dataframe tbody tr:hover {
+        background: #2a2e39 !important;
     }
-
+    
+    /* Buttons - TradingView Blue */
     .stButton>button {
-        background-color: #ffffff;
-        color: #000000;
+        background: #2962ff !important;
+        color: white;
         border: none;
         border-radius: 4px;
-        padding: 10px 20px;
-        font-weight: 600;
-        font-size: 14px;
+        padding: 8px 16px;
+        font-weight: 500;
         transition: all 0.2s;
     }
     
     .stButton>button:hover {
-        background-color: #e6e6e6;
+        background: #1e53e5 !important;
     }
-
-    .status-box {
-        background-color: #0f0f0f;
-        border: 1px solid #1a1a1a;
-        padding: 16px;
-        border-radius: 4px;
-        margin: 12px 0;
-    }
-    
-    .alert-box {
-        background-color: #1a0000;
-        border: 2px solid #ff4444;
-        padding: 20px;
-        border-radius: 8px;
-        margin: 12px 0;
-        animation: pulse 2s infinite;
-    }
-    
-    @keyframes pulse {
-        0% { border-color: #ff4444; }
-        50% { border-color: #ff8888; }
-        100% { border-color: #ff4444; }
-    }
-    
-    .status-box h3 {
-        margin: 0 0 8px 0;
-        font-size: 16px;
-    }
-    
-    .status-box p {
-        margin: 0;
-        color: #999999;
-        font-size: 14px;
-    }
-
-    .info-text {
-        color: #999999;
-        font-size: 14px;
-        line-height: 1.6;
-    }
-    
-    .stSelectbox label, .stSlider label, .stRadio label, .stCheckbox label {
-        color: #ffffff;
-        font-weight: 500;
-        font-size: 14px;
-    }
-    
-    .stTextInput input {
-        background-color: #0f0f0f;
-        border: 1px solid #1a1a1a;
-        color: #ffffff;
-        border-radius: 4px;
-    }
-    
-    .stSelectbox select {
-        background-color: #0f0f0f;
-        border: 1px solid #1a1a1a;
-        color: #ffffff;
-    }
-    
-    hr {
-        border-color: #1a1a1a;
-    }
-    
-    .stProgress > div > div {
-        background-color: #ffffff;
-    }
-    
-    [data-testid="stExpander"] {
-        background-color: #0f0f0f;
-        border: 1px solid #1a1a1a;
-        border-radius: 4px;
-    }
-    
-    .trade-card {
-        background: linear-gradient(135deg, #0f0f0f 0%, #1a1a1a 100%);
-        border: 1px solid #333333;
-        border-radius: 8px;
-        padding: 20px;
-        margin: 10px 0;
-    }
-    
-    .trade-card.buy {
-        border-left: 5px solid #00ff00;
-    }
-    
-    .trade-card.sell {
-        border-left: 5px solid #ff4444;
-    }
-    
-    .notification-badge {
-        background-color: #ff4444;
-        color: white;
-        border-radius: 50%;
-        width: 20px;
-        height: 20px;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 12px;
-        margin-left: 5px;
-    }
-</style>
-""", unsafe_allow_html=True)
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # SESSION STATE INITIALIZATION WITH ALERT SYSTEM
