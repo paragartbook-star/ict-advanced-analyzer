@@ -123,9 +123,8 @@ st.markdown("""
     }
 </style>
 """, unsafe_allow_html=True)
-
 # ═══════════════════════════════════════════════════════════════════════════════
-# SESSION STATE INITIALIZATION
+# SESSION STATE INITIALIZATION WITH ALERT SYSTEM
 # ═══════════════════════════════════════════════════════════════════════════════
 
 if 'watchlist' not in st.session_state:
@@ -151,195 +150,346 @@ if 'sent_alerts' not in st.session_state:
     st.session_state.sent_alerts = []
 if 'notification_queue' not in st.session_state:
     st.session_state.notification_queue = []
-if 'analyze_count' not in st.session_state:
-    st.session_state.analyze_count = 0
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# HELPER FUNCTIONS
+# ENHANCED NOTIFICATION SYSTEM FUNCTIONS
 # ═══════════════════════════════════════════════════════════════════════════════
 
-def get_kill_zone() -> Dict:
-    """Current ICT Kill Zone ko detect karta hai IST time ke hisaab se."""
-    ist_offset = timedelta(hours=5, minutes=30)
-    now_utc = datetime.utcnow()
-    current_time_ist = now_utc + ist_offset
-    current_timet = dtime(current_time_ist.hour, current_time_ist.minute)
-
-    zones = [
-        {
-            "name": "London Open Kill Zone",
-            "start": dtime(13, 0),
-            "end": dtime(16, 0),
-            "multiplier": 2.5,
-            "priority": 5,
-            "description": "Sabse high liquidity aur volatility wala time",
-            "active": False
-        },
-        {
-            "name": "New York Open Kill Zone",
-            "start": dtime(18, 30),
-            "end": dtime(21, 30),
-            "multiplier": 2.0,
-            "priority": 4,
-            "description": "Strong moves aur institutional activity",
-            "active": False
-        },
-        {
-            "name": "London Close Kill Zone",
-            "start": dtime(20, 30),
-            "end": dtime(22, 30),
-            "multiplier": 1.8,
-            "priority": 3,
-            "description": "Position squaring aur reversals ka time",
-            "active": False
-        },
-        {
-            "name": "Asian Kill Zone",
-            "start": dtime(5, 30),
-            "end": dtime(8, 30),
-            "multiplier": 1.2,
-            "priority": 2,
-            "description": "Low volatility, range trading",
-            "active": False
-        }
-    ]
-
-    default = {
-        "name": "No Active Kill Zone",
-        "active": False,
-        "multiplier": 1.0,
-        "priority": 0,
-        "description": "Normal market conditions"
-    }
-
-    for zone in zones:
-        if zone["start"] <= current_timet <= zone["end"]:
-            zone["active"] = True
-            return zone
-
-    return default
-
-def fetch_stock_data(ticker: str) -> Dict:
-    """Fetch stock data from Yahoo Finance"""
-    try:
-        stock = yf.Ticker(ticker)
-        hist = stock.history(period="1mo")
-        info = stock.info
+class NotificationManager:
+    def __init__(self):
+        self.config = NOTIFICATION_CONFIG
         
-        if hist.empty:
-            return None
+    def send_email_alert(self, subject: str, message: str, html_message: str = None):
+        """Send email notification"""
+        if not self.config['email']['enabled']:
+            return False
+            
+        try:
+            msg = MIMEMultipart('alternative')
+            msg['Subject'] = subject
+            msg['From'] = self.config['email']['sender_email']
+            msg['To'] = ', '.join(self.config['email']['recipients'])
+            
+            part1 = MIMEText(message, 'plain')
+            msg.attach(part1)
+            
+            if html_message:
+                part2 = MIMEText(html_message, 'html')
+                msg.attach(part2)
+            
+            with smtplib.SMTP(self.config['email']['smtp_server'], 
+                            self.config['email']['smtp_port']) as server:
+                server.starttls()
+                server.login(self.config['email']['sender_email'], 
+                           self.config['email']['sender_password'])
+                server.send_message(msg)
+            
+            return True
+        except Exception as e:
+            st.error(f"Email error: {str(e)}")
+            return False
+    
+    def send_telegram_alert(self, message: str):
+        """Send Telegram notification"""
+        if not self.config['telegram']['enabled']:
+            return False
+            
+        try:
+            url = f"https://api.telegram.org/bot{self.config['telegram']['bot_token']}/sendMessage"
+            payload = {
+                'chat_id': self.config['telegram']['chat_id'],
+                'text': message,
+                'parse_mode': 'HTML'
+            }
+            response = requests.post(url, json=payload)
+            return response.status_code == 200
+        except Exception as e:
+            st.error(f"Telegram error: {str(e)}")
+            return False
+    
+    def send_whatsapp_alert(self, message: str):
+        """Send WhatsApp notification via Twilio"""
+        if not self.config['whatsapp']['enabled']:
+            return False
+            
+        try:
+            client = Client(self.config['whatsapp']['twilio_sid'], 
+                          self.config['whatsapp']['twilio_token'])
+            
+            for recipient in self.config['whatsapp']['recipients']:
+                message = client.messages.create(
+                    body=message,
+                    from_=f"whatsapp:{self.config['whatsapp']['twilio_number']}",
+                    to=f"whatsapp:{recipient}"
+                )
+            
+            return True
+        except Exception as e:
+            st.error(f"WhatsApp error: {str(e)}")
+            return False
+    
+    def send_sms_alert(self, message: str):
+        """Send SMS notification via Twilio"""
+        if not self.config['sms']['enabled']:
+            return False
+            
+        try:
+            client = Client(self.config['sms']['twilio_sid'], 
+                          self.config['sms']['twilio_token'])
+            
+            for recipient in self.config['sms']['recipients']:
+                message = client.messages.create(
+                    body=message,
+                    from_=self.config['sms']['twilio_number'],
+                    to=recipient
+                )
+            
+            return True
+        except Exception as e:
+            st.error(f"SMS error: {str(e)}")
+            return False
+    
+    def send_discord_alert(self, message: str, title: str = None):
+        """Send Discord webhook notification"""
+        if not self.config['discord']['enabled']:
+            return False
+            
+        try:
+            webhook = discord.Webhook.from_url(
+                self.config['discord']['webhook_url'],
+                adapter=discord.RequestsWebhookAdapter()
+            )
+            
+            embed = discord.Embed(
+                title=title or "ICT Trading Alert",
+                description=message,
+                color=discord.Color.red() if "SELL" in message else discord.Color.green(),
+                timestamp=datetime.now()
+            )
+            
+            webhook.send(embed=embed)
+            return True
+        except Exception as e:
+            st.error(f"Discord error: {str(e)}")
+            return False
+    
+    def send_browser_push(self, title: str, message: str):
+        """Send browser push notification via OneSignal"""
+        if not self.config['push']['enabled']:
+            return False
+            
+        try:
+            headers = {
+                "Content-Type": "application/json",
+                "Authorization": f"Basic {self.config['push']['onesignal_api_key']}"
+            }
+            
+            payload = {
+                "app_id": self.config['push']['onesignal_app_id'],
+                "included_segments": ["All"],
+                "contents": {"en": message},
+                "headings": {"en": title}
+            }
+            
+            response = requests.post(
+                "https://onesignal.com/api/v1/notifications",
+                headers=headers,
+                json=payload
+            )
+            
+            return response.status_code == 200
+        except Exception as e:
+            st.error(f"Push notification error: {str(e)}")
+            return False
+    
+    def play_sound_alert(self, alert_type: str = "info"):
+        """Play sound alert based on type"""
+        if not st.session_state.preferences.get('sound_alerts', True):
+            return
+            
+        # In a real implementation, you would play actual sound files
+        # For Streamlit, we can use JavaScript audio
+        sound_js = """
+        <audio autoplay>
+            <source src="https://assets.mixkit.co/sfx/preview/mixkit-alarm-digital-clock-beep-989.mp3" type="audio/mpeg">
+        </audio>
+        """
+        st.components.v1.html(sound_js, height=0)
+    
+    def send_multichannel_alert(self, alert_data: Dict):
+        """Send alert through all enabled channels"""
+        try:
+            # Format message based on alert type
+            if alert_data['type'] == 'trade_signal':
+                message = self.format_trade_alert(alert_data)
+                subject = f"🚨 TRADE SIGNAL: {alert_data['symbol']} - {alert_data['signal']}"
+            elif alert_data['type'] == 'kill_zone':
+                message = self.format_kill_zone_alert(alert_data)
+                subject = f"⏰ KILL ZONE ACTIVE: {alert_data['zone_name']}"
+            elif alert_data['type'] == 'price_alert':
+                message = self.format_price_alert(alert_data)
+                subject = f"📈 PRICE ALERT: {alert_data['symbol']}"
+            else:
+                message = alert_data.get('message', 'Alert triggered')
+                subject = "ICT Analyzer Alert"
+            
+            # Send through all enabled channels
+            results = {}
+            
+            if self.config['email']['enabled']:
+                html_msg = self.format_html_alert(alert_data)
+                results['email'] = self.send_email_alert(subject, message, html_msg)
+            
+            if self.config['telegram']['enabled']:
+                results['telegram'] = self.send_telegram_alert(message)
+            
+            if self.config['whatsapp']['enabled']:
+                results['whatsapp'] = self.send_whatsapp_alert(message)
+            
+            if self.config['sms']['enabled']:
+                results['sms'] = self.send_sms_alert(message[:160])  # SMS character limit
+            
+            if self.config['discord']['enabled']:
+                results['discord'] = self.send_discord_alert(message, subject)
+            
+            if self.config['push']['enabled']:
+                results['push'] = self.send_browser_push(subject, message)
+            
+            # Play sound if enabled
+            if st.session_state.preferences.get('sound_alerts', True):
+                self.play_sound_alert(alert_data.get('alert_type', 'info'))
+            
+            return results
+            
+        except Exception as e:
+            st.error(f"Multichannel alert error: {str(e)}")
+            return {}
+    
+    def format_trade_alert(self, alert_data: Dict) -> str:
+        """Format trade signal alert message"""
+        symbol = alert_data.get('symbol', '')
+        signal = alert_data.get('signal', '')
+        confidence = alert_data.get('confidence', 0)
+        price = alert_data.get('current_price', 0)
         
-        current_price = hist['Close'].iloc[-1]
-        prev_close = hist['Close'].iloc[-2] if len(hist) > 1 else current_price
-        price_change = ((current_price - prev_close) / prev_close) * 100
-        
-        # Calculate RSI
-        delta = hist['Close'].diff()
-        gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
-        loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
-        rs = gain / loss
-        rsi = 100 - (100 / (1 + rs))
-        
-        return {
-            'symbol': ticker.replace('.NS', ''),
-            'name': info.get('longName', ticker),
-            'price': current_price,
-            'price_change_24h': price_change,
-            'volume': hist['Volume'].iloc[-1],
-            'market_cap': info.get('marketCap', 0),
-            'rsi': rsi.iloc[-1] if not rsi.empty else 50,
-            'high_24h': hist['High'].max(),
-            'low_24h': hist['Low'].min(),
-            'asset_type': 'Stock',
-            'history': hist
-        }
-    except Exception as e:
-        st.error(f"Error fetching {ticker}: {str(e)}")
-        return None
+        message = f"""
+📊 *ICT TRADING ALERT* 📊
 
-def calculate_rsi(prices, period=14):
-    """Calculate RSI indicator"""
-    delta = prices.diff()
-    gain = (delta.where(delta > 0, 0)).rolling(window=period).mean()
-    loss = (-delta.where(delta < 0, 0)).rolling(window=period).mean()
-    rs = gain / loss
-    rsi = 100 - (100 / (1 + rs))
-    return rsi.iloc[-1] if not rsi.empty else 50
+🔸 *Symbol:* {symbol}
+🔸 *Signal:* {signal}
+🔸 *Confidence:* {confidence}%
+🔸 *Current Price:* ${price:.2f}
+🔸 *Time:* {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
 
-def analyze_asset(asset_data: Dict, asset_type: str, kill_zone: Dict) -> Dict:
-    """Comprehensive ICT analysis"""
+📈 *Trade Setup:*
+Entry: ${alert_data.get('entry_price', 0):.2f}
+Stop Loss: ${alert_data.get('stop_loss', 0):.2f} ({alert_data.get('stop_loss_pct', 0):.1f}%)
+Take Profit: ${alert_data.get('take_profit', 0):.2f} ({alert_data.get('take_profit_pct', 0):.1f}%)
+Risk/Reward: 1:{alert_data.get('risk_reward', 0):.1f}
+
+📊 *Analysis:*
+{alert_data.get('analysis', 'No analysis available')}
+
+💡 *Recommendation:* {alert_data.get('recommendation', '')}
+
+⚠️ *Risk Level:* {alert_data.get('risk_level', 'Medium')}/10
+        """
+        
+        return message
     
-    # Basic metrics
-    price = asset_data.get('price', 0)
-    price_change = asset_data.get('price_change_24h', 0)
-    rsi = asset_data.get('rsi', 50)
+    def format_kill_zone_alert(self, alert_data: Dict) -> str:
+        """Format kill zone activation alert"""
+        return f"""
+⏰ *KILL ZONE ACTIVATED* ⏰
+
+Zone: {alert_data.get('zone_name', '')}
+Status: {alert_data.get('status', 'ACTIVE')}
+Multiplier: {alert_data.get('multiplier', 1.0)}x
+Priority: {alert_data.get('priority', 0)}/5
+
+Description: {alert_data.get('description', '')}
+
+Expected: High volatility and liquidity
+Time: {datetime.now().strftime('%H:%M')} IST
+Duration: {alert_data.get('duration', '2 hours')}
+
+Action: Monitor for trade setups
+        """
     
-    # ICT Scoring
-    ict_scores = {
-        'Market Structure': 75 + (abs(price_change) * 2),
-        'Order Blocks': 70 + (rsi / 10),
-        'Fair Value Gaps': 65 + np.random.randint(-10, 15),
-        'Liquidity Zones': 80 + np.random.randint(-5, 10),
-        'Smart Money': 72 + (kill_zone['multiplier'] * 5)
-    }
+    def format_price_alert(self, alert_data: Dict) -> str:
+        """Format price alert message"""
+        return f"""
+📈 *PRICE ALERT TRIGGERED* 📈
+
+Symbol: {alert_data.get('symbol', '')}
+Condition: {alert_data.get('condition', '')}
+Target: ${alert_data.get('target_price', 0):.2f}
+Current: ${alert_data.get('current_price', 0):.2f}
+Change: {alert_data.get('price_change', 0):.2f}%
+
+Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+
+Action: Check chart for potential trade
+        """
     
-    # Apply kill zone multiplier
-    for key in ict_scores:
-        ict_scores[key] = min(99, ict_scores[key] * kill_zone['multiplier'])
-    
-    # Calculate combined score
-    combined_score = sum(ict_scores.values()) / len(ict_scores)
-    
-    # Generate signal
-    if combined_score >= 85 and rsi < 40:
-        signal = "STRONG BUY"
-        confidence = min(99, combined_score + 5)
-    elif combined_score >= 75 and rsi < 50:
-        signal = "BUY"
-        confidence = combined_score
-    elif combined_score <= 35 and rsi > 60:
-        signal = "STRONG SELL"
-        confidence = min(99, 100 - combined_score + 5)
-    elif combined_score <= 45 and rsi > 50:
-        signal = "SELL"
-        confidence = 100 - combined_score
-    else:
-        signal = "HOLD"
-        confidence = 60
-    
-    # Determine trend
-    if price_change > 2:
-        trend = "Strong Bullish"
-    elif price_change > 0:
-        trend = "Bullish"
-    elif price_change < -2:
-        trend = "Strong Bearish"
-    elif price_change < 0:
-        trend = "Bearish"
-    else:
-        trend = "Neutral"
-    
-    # Risk calculation
-    volatility = abs(price_change)
-    risk = min(10, max(1, int(volatility * 2)))
-    
-    return {
-        **asset_data,
-        'ict_scores': ict_scores,
-        'combined_score': combined_score,
-        'signal': signal,
-        'confidence': confidence,
-        'trend': trend,
-        'risk': risk,
-        'kill_zone_active': kill_zone['active']
-    }
+    def format_html_alert(self, alert_data: Dict) -> str:
+        """Format HTML email alert"""
+        html = f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <style>
+                body {{ font-family: Arial, sans-serif; }}
+                .alert-container {{ background: #f8f9fa; padding: 20px; border-radius: 10px; }}
+                .header {{ background: {'#28a745' if 'BUY' in alert_data.get('signal', '') else '#dc3545'}; 
+                         color: white; padding: 15px; border-radius: 5px; }}
+                .trade-details {{ background: white; padding: 15px; margin: 10px 0; border-radius: 5px; }}
+                .metric {{ display: inline-block; margin: 10px; padding: 10px; background: #e9ecef; border-radius: 5px; }}
+            </style>
+        </head>
+        <body>
+            <div class="alert-container">
+                <div class="header">
+                    <h2>🚨 ICT Trading Alert</h2>
+                    <h3>{alert_data.get('symbol', '')} - {alert_data.get('signal', '')}</h3>
+                </div>
+                
+                <div class="trade-details">
+                    <h4>Trade Parameters</h4>
+                    <div class="metric"><strong>Entry:</strong> ${alert_data.get('entry_price', 0):.2f}</div>
+                    <div class="metric"><strong>Stop Loss:</strong> ${alert_data.get('stop_loss', 0):.2f}</div>
+                    <div class="metric"><strong>Take Profit:</strong> ${alert_data.get('take_profit', 0):.2f}</div>
+                    <div class="metric"><strong>Risk/Reward:</strong> 1:{alert_data.get('risk_reward', 0):.1f}</div>
+                </div>
+                
+                <div class="trade-details">
+                    <h4>Analysis</h4>
+                    <p>{alert_data.get('analysis', '')}</p>
+                </div>
+                
+                <p><strong>Time:</strong> {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>
+                <p><strong>Confidence:</strong> {alert_data.get('confidence', 0)}%</p>
+                <p><strong>Risk Level:</strong> {alert_data.get('risk_level', 'Medium')}/10</p>
+            </div>
+        </body>
+        </html>
+        """
+        return html
+
+# Initialize notification manager
+notification_manager = NotificationManager()
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# ENHANCED ALERT PROCESSING FUNCTIONS
+# ═══════════════════════════════════════════════════════════════════════════════
 
 def calculate_trade_parameters(asset_data: Dict, signal: str) -> Dict:
-    """Calculate detailed trade parameters"""
+    """Calculate detailed trade parameters including SL, TP, and position size"""
     current_price = asset_data.get('price', 0)
     volatility = abs(asset_data.get('price_change_24h', 2))
     risk_tolerance = st.session_state.preferences.get('risk_tolerance', 'medium')
     
+    # Risk tolerance mapping
     risk_multiplier = {
         'very low': 0.5,
         'low': 0.75,
@@ -348,24 +498,26 @@ def calculate_trade_parameters(asset_data: Dict, signal: str) -> Dict:
         'very high': 2.0
     }.get(risk_tolerance, 1.0)
     
+    # Calculate stop loss percentage based on volatility
     base_sl_pct = min(5.0, max(1.0, volatility * 0.5))
     sl_pct = base_sl_pct * risk_multiplier
     
-    confidence = asset_data.get('confidence', 80)
+    # Calculate take profit based on risk-reward
     risk_reward = 2.0 if confidence >= 85 else 1.5
     tp_pct = sl_pct * risk_reward
     
     if 'BUY' in signal:
         stop_loss = current_price * (1 - sl_pct/100)
         take_profit = current_price * (1 + tp_pct/100)
-        entry_price = current_price * 0.995
-    else:
+        entry_price = current_price * 0.995  # Slightly below current for buy
+    else:  # SELL signal
         stop_loss = current_price * (1 + sl_pct/100)
         take_profit = current_price * (1 - tp_pct/100)
-        entry_price = current_price * 1.005
+        entry_price = current_price * 1.005  # Slightly above current for sell
     
-    account_size = 10000
-    risk_per_trade = account_size * 0.01
+    # Calculate position size (simplified)
+    account_size = 10000  # Default account size
+    risk_per_trade = account_size * 0.01  # 1% risk per trade
     risk_amount = abs(current_price - stop_loss)
     position_size = risk_per_trade / risk_amount if risk_amount > 0 else 0
     
@@ -382,9 +534,10 @@ def calculate_trade_parameters(asset_data: Dict, signal: str) -> Dict:
     }
 
 def generate_analysis_summary(asset_data: Dict, ict_scores: Dict) -> str:
-    """Generate analysis summary"""
+    """Generate detailed analysis summary for alerts"""
     summary = []
     
+    # Technical analysis
     rsi = asset_data.get('rsi', 50)
     if rsi < 30:
         summary.append("RSI indicates oversold conditions")
@@ -393,12 +546,19 @@ def generate_analysis_summary(asset_data: Dict, ict_scores: Dict) -> str:
     else:
         summary.append("RSI in neutral range")
     
+    # Market structure
     if ict_scores.get('Market Structure', 0) > 80:
         summary.append("Strong market structure alignment")
     
+    # Order blocks
     if ict_scores.get('Order Blocks', 0) > 85:
         summary.append("Clear order block formation detected")
     
+    # Fair Value Gaps
+    if ict_scores.get('Fair Value Gaps', 0) > 80:
+        summary.append("Fair value gaps present for potential fills")
+    
+    # Kill zone
     kill_zone = get_kill_zone()
     if kill_zone['active']:
         summary.append(f"Active kill zone: {kill_zone['name']}")
@@ -410,213 +570,499 @@ def create_trade_alert(asset_data: Dict, analysis: Dict) -> Dict:
     trade_params = calculate_trade_parameters(asset_data, analysis['signal'])
     analysis_summary = generate_analysis_summary(asset_data, analysis.get('ict_scores', {}))
     
-    return {
+    alert_data = {
         'type': 'trade_signal',
         'symbol': asset_data.get('symbol', ''),
         'name': asset_data.get('name', ''),
+        'asset_type': asset_data.get('asset_type', ''),
         'signal': analysis['signal'],
         'current_price': asset_data.get('price', 0),
         'confidence': analysis['confidence'],
+        'trend': analysis['trend'],
         'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+        'timeframe': 'Intraday',
         **trade_params,
         'analysis': analysis_summary,
-        'recommendation': f"Consider {analysis['signal'].lower()} position",
-        'risk_level': analysis['risk']
+        'recommendation': f"Consider {analysis['signal'].lower()} position with tight risk management",
+        'risk_level': analysis['risk'],
+        'priority': 'HIGH' if analysis['confidence'] >= 90 else 'MEDIUM',
+        'kill_zone': get_kill_zone()['name'],
+        'market_condition': 'Volatile' if abs(asset_data.get('price_change_24h', 0)) > 3 else 'Normal'
     }
-
-def add_to_watchlist(asset_data: Dict) -> bool:
-    """Add asset to watchlist"""
-    symbol = asset_data.get('symbol', '')
-    if symbol and symbol not in [w.get('symbol') for w in st.session_state.watchlist]:
-        st.session_state.watchlist.append(asset_data)
-        return True
-    return False
-
-def create_advanced_chart(ticker: str, show_ict: bool = True):
-    """Create advanced trading chart"""
-    try:
-        stock = yf.Ticker(ticker)
-        hist = stock.history(period="3mo")
-        
-        if hist.empty:
-            return None
-        
-        fig = make_subplots(
-            rows=2, cols=1,
-            shared_xaxes=True,
-            vertical_spacing=0.03,
-            row_heights=[0.7, 0.3]
-        )
-        
-        # Candlestick chart
-        fig.add_trace(
-            go.Candlestick(
-                x=hist.index,
-                open=hist['Open'],
-                high=hist['High'],
-                low=hist['Low'],
-                close=hist['Close'],
-                name='Price'
-            ),
-            row=1, col=1
-        )
-        
-        # Volume
-        colors = ['red' if hist['Close'].iloc[i] < hist['Open'].iloc[i] else 'green' 
-                  for i in range(len(hist))]
-        fig.add_trace(
-            go.Bar(x=hist.index, y=hist['Volume'], name='Volume', marker_color=colors),
-            row=2, col=1
-        )
-        
-        fig.update_layout(
-            title=f"{ticker} - ICT Analysis",
-            template='plotly_dark',
-            height=600,
-            showlegend=False,
-            xaxis_rangeslider_visible=False
-        )
-        
-        return fig
-    except Exception as e:
-        st.error(f"Chart error: {str(e)}")
-        return None
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# UI DISPLAY FUNCTIONS
-# ═══════════════════════════════════════════════════════════════════════════════
-
-def display_watchlist():
-    """Display watchlist page"""
-    st.subheader("📋 Your Watchlist")
     
-    if not st.session_state.watchlist:
-        st.info("Your watchlist is empty. Add stocks from Market Analysis page.")
-        return
-    
-    for item in st.session_state.watchlist:
-        col1, col2, col3, col4 = st.columns([3, 2, 2, 1])
-        with col1:
-            st.write(f"**{item.get('symbol')}** - {item.get('name', '')[:30]}")
-        with col2:
-            st.write(f"₹{item.get('price', 0):.2f}")
-        with col3:
-            change = item.get('price_change_24h', 0)
-            st.write(f"{'🟢' if change > 0 else '🔴'} {change:.2f}%")
-        with col4:
-            if st.button("Remove", key=f"remove_{item.get('symbol')}"):
-                st.session_state.watchlist = [w for w in st.session_state.watchlist 
-                                             if w.get('symbol') != item.get('symbol')]
-                st.rerun()
+    return alert_data
 
-def display_portfolio():
-    """Display portfolio page"""
-    st.subheader("💼 Portfolio Tracker")
-    st.info("Portfolio tracking feature - Add your holdings here")
+def check_and_send_alerts(asset_data: Dict, analysis: Dict):
+    """Check if alerts should be sent and send them"""
+    threshold = st.session_state.preferences.get('alert_threshold', 90)
     
-    # Simple portfolio input
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        symbol = st.text_input("Stock Symbol")
-    with col2:
-        quantity = st.number_input("Quantity", min_value=1, value=1)
-    with col3:
-        buy_price = st.number_input("Buy Price", min_value=0.01, value=100.0)
-    
-    if st.button("Add to Portfolio"):
-        st.session_state.portfolio.append({
-            'symbol': symbol,
-            'quantity': quantity,
-            'buy_price': buy_price,
-            'date': datetime.now().strftime('%Y-%m-%d')
+    # Check confidence threshold
+    if analysis['confidence'] >= threshold:
+        # Create trade alert
+        trade_alert = create_trade_alert(asset_data, analysis)
+        
+        # Add to sent alerts history
+        st.session_state.sent_alerts.append({
+            **trade_alert,
+            'sent_time': datetime.now().isoformat()
         })
-        st.success(f"Added {symbol} to portfolio!")
+        
+        # Keep only last 100 alerts
+        if len(st.session_state.sent_alerts) > 100:
+            st.session_state.sent_alerts = st.session_state.sent_alerts[-100:]
+        
+        # Send notifications
+        notification_manager.config = st.session_state.preferences['notification_services']
+        results = notification_manager.send_multichannel_alert(trade_alert)
+        
+        # Log results
+        if any(results.values()):
+            st.success(f"Alert sent for {asset_data['symbol']} with {analysis['confidence']}% confidence")
+        else:
+            st.warning(f"Alert created but not sent (check notification settings)")
+        
+        return trade_alert
+    
+    return None
 
-def display_backtesting():
-    """Display backtesting page"""
-    st.subheader("📊 Strategy Backtesting")
-    st.info("Backtest your ICT strategies with historical data")
+def monitor_kill_zones():
+    """Monitor and alert for kill zone activations"""
+    kill_zone = get_kill_zone()
     
-    col1, col2 = st.columns(2)
-    with col1:
-        st.selectbox("Select Strategy", ["ICT Market Structure", "Order Blocks", "Fair Value Gaps"])
-    with col2:
-        st.date_input("Backtest Period", value=[datetime.now() - timedelta(days=90), datetime.now()])
-    
-    if st.button("Run Backtest"):
-        st.info("Backtesting feature coming soon!")
+    if kill_zone['active'] and st.session_state.preferences.get('kill_zone_alerts', True):
+        # Check if we already sent an alert for this zone
+        last_alert_time = None
+        for alert in reversed(st.session_state.sent_alerts):
+            if alert.get('type') == 'kill_zone' and alert.get('zone_name') == kill_zone['name']:
+                last_alert_time = datetime.fromisoformat(alert.get('sent_time', ''))
+                break
+        
+        # Send alert if not sent in last 30 minutes
+        if not last_alert_time or (datetime.now() - last_alert_time).total_seconds() > 1800:
+            kill_zone_alert = {
+                'type': 'kill_zone',
+                'zone_name': kill_zone['name'],
+                'status': 'ACTIVE',
+                'multiplier': kill_zone['multiplier'],
+                'priority': kill_zone['priority'],
+                'description': kill_zone['description'],
+                'duration': '2 hours',
+                'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            }
+            
+            notification_manager.config = st.session_state.preferences['notification_services']
+            notification_manager.send_multichannel_alert(kill_zone_alert)
+            
+            st.session_state.sent_alerts.append({
+                **kill_zone_alert,
+                'sent_time': datetime.now().isoformat()
+            })
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# ENHANCED UI COMPONENTS FOR ALERT SYSTEM
+# ═══════════════════════════════════════════════════════════════════════════════
 
 def display_alert_settings():
-    """Display alert configuration"""
+    """Display alert configuration settings"""
     st.subheader("🔔 Alert System Configuration")
     
     col1, col2 = st.columns(2)
     
     with col1:
         st.session_state.preferences['alert_threshold'] = st.slider(
-            "Confidence Threshold",
-            70, 99,
-            st.session_state.preferences.get('alert_threshold', 90)
+            "Confidence Threshold for Alerts",
+            min_value=70,
+            max_value=99,
+            value=st.session_state.preferences.get('alert_threshold', 90),
+            help="Only send alerts when confidence is above this percentage"
         )
         
         st.session_state.preferences['sound_alerts'] = st.checkbox(
             "Enable Sound Alerts",
             value=st.session_state.preferences.get('sound_alerts', True)
         )
+        
+        st.session_state.preferences['kill_zone_alerts'] = st.checkbox(
+            "Enable Kill Zone Alerts",
+            value=st.session_state.preferences.get('kill_zone_alerts', True)
+        )
     
     with col2:
-        st.selectbox("Alert Frequency", ['All Signals', 'High Confidence Only'])
-        st.multiselect("Alert Hours", ['Pre-Market', 'Regular Hours', 'After-Hours'])
+        # Alert frequency
+        alert_frequency = st.selectbox(
+            "Alert Frequency",
+            ['All Signals', 'High Confidence Only', 'Daily Digest'],
+            index=0
+        )
+        
+        # Market hours filter
+        market_hours = st.multiselect(
+            "Alert During Market Hours",
+            ['Pre-Market', 'Regular Hours', 'After-Hours', '24/7'],
+            default=['Regular Hours', 'Pre-Market']
+        )
+
+        selected_stocks = st.multiselect("Choose stocks to analyze", NIFTY_50, default=NIFTY_50[:10])
+        assets_to_analyze = selected_stocks
     
-    st.info("Configure notification channels (Email, Telegram, WhatsApp, etc.) in the expanders below")
+    st.write("---")
+    st.subheader("📱 Notification Channels")
+    
+    # Email Configuration
+    with st.expander("Email Settings", expanded=False):
+        email_config = st.session_state.preferences['notification_services']['email']
+        email_config['enabled'] = st.checkbox("Enable Email Alerts", value=email_config['enabled'])
+        
+        if email_config['enabled']:
+            col1, col2 = st.columns(2)
+            with col1:
+                email_config['sender_email'] = st.text_input(
+                    "Sender Email",
+                    value=email_config['sender_email'],
+                    type="password"
+                )
+                email_config['sender_password'] = st.text_input(
+                    "App Password",
+                    value=email_config['sender_password'],
+                    type="password"
+                )
+            with col2:
+                recipients = st.text_area(
+                    "Recipient Emails (one per line)",
+                    value="\n".join(email_config['recipients'])
+                )
+                email_config['recipients'] = [r.strip() for r in recipients.split('\n') if r.strip()]
+    
+    # Telegram Configuration
+    with st.expander("Telegram Settings", expanded=False):
+        telegram_config = st.session_state.preferences['notification_services']['telegram']
+        telegram_config['enabled'] = st.checkbox("Enable Telegram Alerts", value=telegram_config['enabled'])
+        
+        if telegram_config['enabled']:
+            telegram_config['bot_token'] = st.text_input(
+                "Bot Token",
+                value=telegram_config['bot_token'],
+                type="password"
+            )
+            telegram_config['chat_id'] = st.text_input(
+                "Chat ID",
+                value=telegram_config['chat_id']
+            )
+            
+            if st.button("Test Telegram Connection"):
+                if telegram_config['bot_token'] and telegram_config['chat_id']:
+                    test_msg = "✅ ICT Analyzer Telegram connection test successful!"
+                    if notification_manager.send_telegram_alert(test_msg):
+                        st.success("Telegram test message sent!")
+                    else:
+                        st.error("Failed to send test message")
+    
+    # WhatsApp Configuration
+    with st.expander("WhatsApp Settings", expanded=False):
+        whatsapp_config = st.session_state.preferences['notification_services']['whatsapp']
+        whatsapp_config['enabled'] = st.checkbox("Enable WhatsApp Alerts", value=whatsapp_config['enabled'])
+        
+        if whatsapp_config['enabled']:
+            col1, col2 = st.columns(2)
+            with col1:
+                whatsapp_config['twilio_sid'] = st.text_input(
+                    "Twilio SID",
+                    value=whatsapp_config['twilio_sid'],
+                    type="password"
+                )
+                whatsapp_config['twilio_token'] = st.text_input(
+                    "Twilio Token",
+                    value=whatsapp_config['twilio_token'],
+                    type="password"
+                )
+            with col2:
+                whatsapp_config['twilio_number'] = st.text_input(
+                    "Twilio Number",
+                    value=whatsapp_config['twilio_number']
+                )
+                recipients = st.text_area(
+                    "WhatsApp Numbers (with country code)",
+                    value="\n".join(whatsapp_config['recipients'])
+                )
+                whatsapp_config['recipients'] = [r.strip() for r in recipients.split('\n') if r.strip()]
+    
+    # SMS Configuration
+    with st.expander("SMS Settings", expanded=False):
+        sms_config = st.session_state.preferences['notification_services']['sms']
+        sms_config['enabled'] = st.checkbox("Enable SMS Alerts", value=sms_config['enabled'])
+        
+        if sms_config['enabled']:
+            col1, col2 = st.columns(2)
+            with col1:
+                sms_config['twilio_sid'] = st.text_input(
+                    "Twilio SID (SMS)",
+                    value=sms_config['twilio_sid'],
+                    type="password"
+                )
+                sms_config['twilio_token'] = st.text_input(
+                    "Twilio Token (SMS)",
+                    value=sms_config['twilio_token'],
+                    type="password"
+                )
+            with col2:
+                sms_config['twilio_number'] = st.text_input(
+                    "Twilio Number (SMS)",
+                    value=sms_config['twilio_number']
+                )
+                recipients = st.text_area(
+                    "Phone Numbers (with country code)",
+                    value="\n".join(sms_config['recipients'])
+                )
+                sms_config['recipients'] = [r.strip() for r in recipients.split('\n') if r.strip()]
+    
+    # Discord Configuration
+    with st.expander("Discord Settings", expanded=False):
+        discord_config = st.session_state.preferences['notification_services']['discord']
+        discord_config['enabled'] = st.checkbox("Enable Discord Alerts", value=discord_config['enabled'])
+        
+        if discord_config['enabled']:
+            discord_config['webhook_url'] = st.text_input(
+                "Discord Webhook URL",
+                value=discord_config['webhook_url'],
+                type="password"
+            )
+            
+            if st.button("Test Discord Webhook"):
+                if discord_config['webhook_url']:
+                    test_msg = "✅ ICT Analyzer Discord webhook test successful!"
+                    if notification_manager.send_discord_alert(test_msg, "Test Notification"):
+                        st.success("Discord test message sent!")
+                    else:
+                        st.error("Failed to send test message")
+    
+    # Push Notification Configuration
+    with st.expander("Push Notification Settings", expanded=False):
+        push_config = st.session_state.preferences['notification_services']['push']
+        push_config['enabled'] = st.checkbox("Enable Browser Push Alerts", value=push_config['enabled'])
+        
+        if push_config['enabled']:
+            push_config['onesignal_app_id'] = st.text_input(
+                "OneSignal App ID",
+                value=push_config['onesignal_app_id'],
+                type="password"
+            )
+            push_config['onesignal_api_key'] = st.text_input(
+                "OneSignal API Key",
+                value=push_config['onesignal_api_key'],
+                type="password"
+            )
+    
+    st.write("---")
+    
+    # Test all notifications
+    if st.button("🚨 Test All Notification Channels"):
+        test_alert = {
+            'type': 'trade_signal',
+            'symbol': 'TEST',
+            'signal': 'TEST BUY',
+            'confidence': 95,
+            'current_price': 100.50,
+            'entry_price': 100.00,
+            'stop_loss': 98.00,
+            'take_profit': 104.00,
+            'analysis': 'This is a test alert to verify all notification channels are working properly.',
+            'risk_level': 3
+        }
+        
+        notification_manager.config = st.session_state.preferences['notification_services']
+        results = notification_manager.send_multichannel_alert(test_alert)
+        
+        success_count = sum(1 for r in results.values() if r)
+        st.success(f"Test alerts sent: {success_count}/{len(results)} channels successful")
 
 def display_sent_alerts():
-    """Display alert history"""
+    """Display history of sent alerts"""
     st.subheader("📨 Alert History")
     
     if not st.session_state.sent_alerts:
-        st.info("No alerts sent yet.")
+        st.info("No alerts have been sent yet.")
         return
     
-    for alert in reversed(st.session_state.sent_alerts[-10:]):
-        st.markdown(f"""
-        <div class="status-box">
-            <h4>{alert.get('symbol')} - {alert.get('signal')}</h4>
-            <p><strong>Time:</strong> {alert.get('timestamp')}</p>
-            <p><strong>Confidence:</strong> {alert.get('confidence')}%</p>
-        </div>
-        """, unsafe_allow_html=True)
-
-def display_realtime_alerts():
-    """Display real-time monitoring"""
-    st.subheader("🔍 Real-time Alert Monitor")
-    
-    st.checkbox("Auto-refresh every 30 seconds", value=True)
-    
+    # Filter options
     col1, col2, col3 = st.columns(3)
     with col1:
-        st.metric("Threshold", f"{st.session_state.preferences.get('alert_threshold', 90)}%")
+        filter_type = st.selectbox("Filter by Type", ['All', 'Trade Signal', 'Kill Zone', 'Price Alert'])
     with col2:
-        kill_zone = get_kill_zone()
-        st.metric("Kill Zone", kill_zone['name'][:15])
+        filter_symbol = st.text_input("Filter by Symbol", "")
     with col3:
-        st.metric("Alert Channels", 0)
+        filter_days = st.slider("Last N Days", 1, 30, 7)
+    
+    # Filter alerts
+    filtered_alerts = st.session_state.sent_alerts.copy()
+    
+    # Filter by date
+    cutoff_date = datetime.now() - timedelta(days=filter_days)
+    filtered_alerts = [
+        a for a in filtered_alerts 
+        if datetime.fromisoformat(a.get('sent_time', '2000-01-01')) >= cutoff_date
+    ]
+    
+    # Filter by type
+    if filter_type != 'All':
+        type_map = {
+            'Trade Signal': 'trade_signal',
+            'Kill Zone': 'kill_zone',
+            'Price Alert': 'price_alert'
+        }
+        filtered_alerts = [a for a in filtered_alerts if a.get('type') == type_map[filter_type]]
+    
+    # Filter by symbol
+    if filter_symbol:
+        filtered_alerts = [a for a in filtered_alerts if filter_symbol.lower() in a.get('symbol', '').lower()]
+    
+    if not filtered_alerts:
+        st.info("No alerts match the selected filters.")
+        return
+    
+    # Display alerts in reverse chronological order
+    filtered_alerts.sort(key=lambda x: x.get('sent_time', ''), reverse=True)
+    
+    for alert in filtered_alerts[:20]:  # Show last 20 alerts
+        with st.container():
+            if alert.get('type') == 'trade_signal':
+                signal_class = "buy" if "BUY" in alert.get('signal', '') else "sell"
+                st.markdown(f"""
+                <div class="trade-card {signal_class}">
+                    <h4>🚨 {alert.get('symbol', '')} - {alert.get('signal', '')}</h4>
+                    <p><strong>Time:</strong> {alert.get('timestamp', '')}</p>
+                    <p><strong>Confidence:</strong> {alert.get('confidence', 0)}%</p>
+                    <p><strong>Entry:</strong> ${alert.get('entry_price', 0):.2f} | 
+                    <strong>SL:</strong> ${alert.get('stop_loss', 0):.2f} | 
+                    <strong>TP:</strong> ${alert.get('take_profit', 0):.2f}</p>
+                    <p><strong>Analysis:</strong> {alert.get('analysis', '')}</p>
+                </div>
+                """, unsafe_allow_html=True)
+            
+            elif alert.get('type') == 'kill_zone':
+                st.markdown(f"""
+                <div class="status-box">
+                    <h3>⏰ {alert.get('zone_name', '')}</h3>
+                    <p><strong>Time:</strong> {alert.get('timestamp', '')}</p>
+                    <p>{alert.get('description', '')}</p>
+                    <p>Multiplier: {alert.get('multiplier', 1.0)}x | Priority: {alert.get('priority', 0)}/5</p>
+                </div>
+                """, unsafe_allow_html=True)
+    
+    # Export alerts option
+    if st.button("Export Alert History to CSV"):
+        df = pd.DataFrame(filtered_alerts)
+        csv = df.to_csv(index=False)
+        st.download_button(
+            "Download CSV",
+            csv,
+            f"alert_history_{datetime.now().strftime('%Y%m%d')}.csv",
+            "text/csv"
+        )
+
+def display_realtime_alerts():
+    """Display real-time alert monitoring dashboard"""
+    st.subheader("🔍 Real-time Alert Monitor")
+    
+    # Auto-refresh toggle
+    auto_refresh = st.checkbox("Auto-refresh every 30 seconds", value=True)
+    
+    if auto_refresh:
+        st.write("Monitoring for high-confidence signals...")
+        
+        # In a real implementation, you would have a background thread
+        # For demo, we'll simulate with a button
+        if st.button("Check for New Alerts Now"):
+            # Simulate checking for alerts
+            st.info("Scanning top 10 assets for high-confidence signals...")
+            
+            # Get current kill zone
+            kill_zone = get_kill_zone()
+            
+            # Display current monitoring status
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.metric("Confidence Threshold", f"{st.session_state.preferences.get('alert_threshold', 90)}%")
+            with col2:
+                st.metric("Active Kill Zone", kill_zone['name'])
+            with col3:
+                st.metric("Alert Channels", 
+                         sum(1 for service in st.session_state.preferences['notification_services'].values() 
+                             if service.get('enabled', False)))
+            
+            # Show last sent alert
+            if st.session_state.sent_alerts:
+                last_alert = st.session_state.sent_alerts[-1]
+                st.markdown(f"""
+                <div class="alert-box">
+                    <h4>📨 Last Alert Sent</h4>
+                    <p><strong>{last_alert.get('symbol', '')}</strong> - {last_alert.get('signal', '')}</p>
+                    <p>Time: {last_alert.get('timestamp', '')} | Confidence: {last_alert.get('confidence', 0)}%</p>
+                </div>
+                """, unsafe_allow_html=True)
+    
+    # Quick alert creation
+    st.write("---")
+    st.subheader("📝 Create Manual Alert")
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        manual_symbol = st.text_input("Symbol", placeholder="AAPL, BTC, etc.")
+        manual_signal = st.selectbox("Signal Type", ["BUY", "SELL", "STRONG BUY", "STRONG SELL"])
+        manual_confidence = st.slider("Confidence", 70, 99, 85)
+    
+    with col2:
+        manual_price = st.number_input("Current Price", min_value=0.01, step=0.01)
+        manual_sl = st.number_input("Stop Loss", min_value=0.01, step=0.01)
+        manual_tp = st.number_input("Take Profit", min_value=0.01, step=0.01)
+    
+    manual_analysis = st.text_area("Analysis Notes", placeholder="Enter your analysis here...")
+    
+    if st.button("Send Manual Alert"):
+        if manual_symbol and manual_price > 0:
+            manual_alert = {
+                'type': 'trade_signal',
+                'symbol': manual_symbol,
+                'signal': manual_signal,
+                'confidence': manual_confidence,
+                'current_price': manual_price,
+                'entry_price': manual_price,
+                'stop_loss': manual_sl,
+                'take_profit': manual_tp,
+                'analysis': manual_analysis or "Manual alert created by user",
+                'risk_level': 5,
+                'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            }
+            
+            notification_manager.config = st.session_state.preferences['notification_services']
+            results = notification_manager.send_multichannel_alert(manual_alert)
+            
+            st.session_state.sent_alerts.append({
+                **manual_alert,
+                'sent_time': datetime.now().isoformat()
+            })
+            
+            success_count = sum(1 for r in results.values() if r)
+            st.success(f"Manual alert sent via {success_count} channel(s)!")
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# MAIN APPLICATION
+# MODIFIED MAIN APPLICATION WITH ALERT INTEGRATION
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def main():
-    st.title("🚨 ICT Professional Analyzer")
-    st.markdown("**Complete Trading Suite with Alert System**")
+    st.title("🚨 ICT Professional Analyzer with Alert System")
+    st.markdown("**Complete Trading Suite with Multi-channel Notifications**")
 
     kill_zone = get_kill_zone()
+    
+    # Monitor kill zones in background
+    monitor_kill_zones()
 
     if kill_zone['active']:
         st.markdown(f"""
         <div class="alert-box">
             <h3>⏰ {kill_zone['name']} - ACTIVE</h3>
-            <p>{kill_zone['description']}</p>
+            <p>{kill_zone['description']} | Multiplier: {kill_zone['multiplier']}x | Priority: {kill_zone['priority']}/5</p>
+            <p><strong>High probability trading window - Alerts are enhanced!</strong></p>
         </div>
         """, unsafe_allow_html=True)
     else:
@@ -627,142 +1073,276 @@ def main():
         </div>
         """, unsafe_allow_html=True)
 
-    # Sidebar Navigation
+    # Sidebar Navigation with Alert Badge
+    alert_count = len([a for a in st.session_state.sent_alerts 
+                      if (datetime.now() - datetime.fromisoformat(a.get('sent_time', '2000-01-01'))).days < 1])
+    
     st.sidebar.title("Navigation")
     page = st.sidebar.radio("Select Page", [
-        "Market Analysis",
+        f"Market Analysis {'🔔' if alert_count > 0 else ''}",
         "Watchlist",
         "Portfolio Tracker",
         "Alert Dashboard",
         "Alert History",
         "Alert Settings",
-        "Backtesting"
+        "Backtesting",
+        "Correlation Matrix",
+        "Settings"
     ])
 
-    # PAGE ROUTING
-    if page == "Market Analysis":
-        st.header("Real-Time Market Analysis")
+    # Remove emoji from page name for comparison
+    page_clean = page.replace('🔔', '').strip()
+
+    # PAGE: MARKET ANALYSIS (Enhanced with auto-alerts)
+    if page_clean == "Market Analysis":
+        st.header("Real-Time Market Analysis with Auto-Alerts")
         
+        # Display alert status
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("Today's Alerts", alert_count)
+        with col2:
+            threshold = st.session_state.preferences.get('alert_threshold', 90)
+            st.metric("Alert Threshold", f"{threshold}%")
+        with col3:
+            enabled_channels = sum(1 for service in st.session_state.preferences['notification_services'].values() 
+                                  if service.get('enabled', False))
+            st.metric("Active Channels", enabled_channels)
+
+        asset_type = st.selectbox(
+            "Choose Asset Class",
+            ["Indian Stocks (Nifty 50)", "Cryptocurrencies", "Forex Pairs"]
+        )
+
         col1, col2 = st.columns(2)
         with col1:
-            analyze_count = st.slider("Stocks to Analyze", 5, 30, 10)
+            analyze_count = st.slider("Assets to Analyze", 5, 30, 10)
         with col2:
             show_ict_overlays = st.checkbox("Show ICT Overlays", value=True)
+            auto_send_alerts = st.checkbox("Auto-send High Confidence Alerts", value=True)
 
-        if st.button("Start Analysis", use_container_width=True):
-            st.subheader("Analyzing Nifty 50 Stocks...")
-            
-            # Use session state counter
-            current_index = st.session_state.analyze_count
-            
-            if current_index >= len(NIFTY_50):
-                st.session_state.analyze_count = 0
-                current_index = 0
-            
-            assets_to_analyze = [NIFTY_50[current_index]]
-            st.session_state.analyze_count += 1
+        if st.button("Start Analysis with Alerts", use_container_width=True):
+            if "Stocks" in asset_type:
+                st.subheader("Nifty 50 Stock Analysis with Alert Monitoring")
+                if analyze_count < len(NIFTY_50):
+                    assets_to_analyze = [NIFTY_50[analyze_count]]  # List bana do agar single stock analyze kar rahe ho
+                else:
+                    st.error("All stocks analyzed! Resetting to start...")
+                    st.session_state.analyze_count = 0
+                    assets_to_analyze = [NIFTY_50[0]]
 
-            progress_bar = st.progress(0)
-            status_text = st.empty()
+                progress_bar = st.progress(0)
+                status_text = st.empty()
 
-            results = []
-            
-            for i, ticker in enumerate(assets_to_analyze):
-                status_text.text(f"Analyzing {ticker}... ({i + 1}/{len(assets_to_analyze)})")
-                data = fetch_stock_data(ticker)
+                results = []
+                alerts_sent = 0
                 
-                if data:
-                    analysis = analyze_asset(data, 'Stock', kill_zone)
-                    results.append(analysis)
+                for i, ticker in enumerate(assets_to_analyze):
+                    status_text.text(f"Analyzing {ticker}... ({i + 1}/{len(assets_to_analyze)})")
+                    data = fetch_stock_data(ticker)
+                    
+                    if data:
+                        analysis = analyze_asset(data, 'Stock', kill_zone)
+                        results.append(analysis)
 
-                progress_bar.progress((i + 1) / len(assets_to_analyze))
-                time.sleep(0.2)
+                        # Check and send alerts if confidence is high
+                        if auto_send_alerts and analysis['confidence'] >= st.session_state.preferences.get('alert_threshold', 90):
+                            alert_sent = check_and_send_alerts(data, analysis)
+                            if alert_sent:
+                                alerts_sent += 1
+                                st.success(f"✅ Alert sent for {ticker} ({analysis['confidence']}% confidence)")
 
-            status_text.empty()
-            progress_bar.empty()
+                    progress_bar.progress((i + 1) / len(assets_to_analyze))
+                    time.sleep(0.2)
 
-            if results:
-                results_sorted = sorted(results, key=lambda x: x['combined_score'], reverse=True)
+                status_text.empty()
+                progress_bar.empty()
 
-                st.subheader(f"Top Opportunities")
+                if results:
+                    results_sorted = sorted(results, key=lambda x: x['combined_score'], reverse=True)
 
-                df_data = []
-                for r in results_sorted[:10]:
-                    df_data.append({
-                        'Symbol': r['symbol'],
-                        'Name': r['name'][:25],
-                        'Price': f"₹{r['price']:.2f}",
-                        'Change': f"{r['price_change_24h']:.2f}%",
-                        'Score': f"{r['combined_score']:.1f}",
-                        'Signal': r['signal'],
-                        'Confidence': f"{r['confidence']}%"
-                    })
+                    st.subheader(f"Top 10 Opportunities (Alerts Sent: {alerts_sent})")
 
-                df = pd.DataFrame(df_data)
-                st.dataframe(df, use_container_width=True, height=400)
+                    # Enhanced dataframe with alert indicators
+                    df_data = []
+                    for r in results_sorted[:10]:
+                        alert_indicator = "🔔" if r['confidence'] >= st.session_state.preferences.get('alert_threshold', 90) else ""
+                        df_data.append({
+                            'Symbol': f"{r['symbol']} {alert_indicator}",
+                            'Name': r['name'][:25],
+                            'Price': f"₹{r['price']:.2f}",
+                            'Change': f"{r['price_change_24h']:.2f}%",
+                            'Score': f"{r['combined_score']:.1f}",
+                            'Signal': r['signal'],
+                            'Confidence': f"{r['confidence']}%",
+                            'Risk': f"{r['risk']}/10"
+                        })
 
-                # Top pick details
-                st.subheader("📊 Top Pick Analysis")
-                top_pick = results_sorted[0]
-                
-                trade_params = calculate_trade_parameters(top_pick, top_pick['signal'])
-                
-                col1, col2, col3, col4 = st.columns(4)
-                with col1:
-                    st.metric("Confidence", f"{top_pick['confidence']:.1f}%")
-                with col2:
-                    st.metric("Entry", f"₹{trade_params['entry_price']:.2f}")
-                with col3:
-                    st.metric("Stop Loss", f"₹{trade_params['stop_loss']:.2f}")
-                with col4:
-                    st.metric("Take Profit", f"₹{trade_params['take_profit']:.2f}")
+                    df = pd.DataFrame(df_data)
+                    st.dataframe(df, use_container_width=True, height=400)
 
-                col1, col2 = st.columns(2)
-                with col1:
-                    if st.button("📝 Add to Watchlist", use_container_width=True):
-                        if add_to_watchlist(top_pick):
-                            st.success("Added to watchlist!")
-                with col2:
-                    if st.button("📊 View Chart", use_container_width=True):
-                        chart = create_advanced_chart(top_pick['symbol'] + '.NS', show_ict_overlays)
-                        if chart:
-                            st.plotly_chart(chart, use_container_width=True)
+                    # Top pick with detailed trade parameters
+                    st.subheader("📊 Detailed Analysis - Top Pick")
+                    top_pick = results_sorted[0]
+                    
+                    if top_pick['confidence'] >= st.session_state.preferences.get('alert_threshold', 90):
+                        st.markdown(f"""
+                        <div class="alert-box">
+                            <h4>🚨 HIGH CONFIDENCE SIGNAL DETECTED!</h4>
+                            <p>This signal meets the alert threshold ({st.session_state.preferences.get('alert_threshold', 90)}% confidence). 
+                            Alerts have been sent to configured channels.</p>
+                        </div>
+                        """, unsafe_allow_html=True)
 
-    elif page == "Watchlist":
-        display_watchlist()
-    elif page == "Portfolio Tracker":
-        display_portfolio()
-    elif page == "Alert Dashboard":
+                    # Calculate trade parameters for top pick
+                    trade_params = calculate_trade_parameters(top_pick, top_pick['signal'])
+                    
+                    col1, col2, col3, col4, col5 = st.columns(5)
+                    with col1:
+                        st.metric("Confidence", f"{top_pick['confidence']:.1f}%")
+                    with col2:
+                        st.metric("Entry", f"₹{trade_params['entry_price']:.2f}")
+                    with col3:
+                        st.metric("Stop Loss", f"₹{trade_params['stop_loss']:.2f}")
+                    with col4:
+                        st.metric("Take Profit", f"₹{trade_params['take_profit']:.2f}")
+                    with col5:
+                        st.metric("R:R", f"1:{trade_params['risk_reward']:.1f}")
+
+                    # Trade action buttons
+                    col1, col2, col3, col4 = st.columns(4)
+                    with col1:
+                        if st.button("📝 Add to Watchlist", use_container_width=True):
+                            if add_to_watchlist(top_pick):
+                                st.success("Added to watchlist")
+                    with col2:
+                        if st.button("📤 Send Custom Alert", use_container_width=True):
+                            custom_alert = create_trade_alert(top_pick, top_pick)
+                            notification_manager.config = st.session_state.preferences['notification_services']
+                            notification_manager.send_multichannel_alert(custom_alert)
+                            st.success("Custom alert sent!")
+                    with col3:
+                        if st.button("📊 View Chart", use_container_width=True):
+                            chart = create_advanced_chart(top_pick['symbol'] + '.NS', show_ict=show_ict_overlays)
+                            if chart:
+                                st.plotly_chart(chart, use_container_width=True)
+                    with col4:
+                        if st.button("💾 Export Report", use_container_width=True):
+                            report = {
+                                'analysis': top_pick,
+                                'trade_parameters': trade_params,
+                                'timestamp': datetime.now().isoformat()
+                            }
+                            json_str = json.dumps(report, indent=2)
+                            st.download_button(
+                                "Download JSON",
+                                json_str,
+                                f"trade_report_{top_pick['symbol']}_{datetime.now().strftime('%Y%m%d_%H%M')}.json",
+                                "application/json"
+                            )
+
+                    # Display detailed trade parameters
+                    with st.expander("📋 Complete Trade Setup", expanded=True):
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            st.write("**Position Sizing**")
+                            st.metric("Position Size", f"{trade_params['position_size']:.2f} units")
+                            st.metric("Risk per Trade", f"₹{trade_params['risk_amount']:.2f}")
+                            st.metric("Risk %", f"{trade_params['risk_per_trade_pct']:.1f}%")
+                            
+                        with col2:
+                            st.write("**Trade Parameters**")
+                            st.metric("Stop Loss %", f"{trade_params['stop_loss_pct']:.1f}%")
+                            st.metric("Take Profit %", f"{trade_params['take_profit_pct']:.1f}%")
+                            st.metric("Risk/Reward", f"1:{trade_params['risk_reward']:.1f}")
+                        
+                        st.write("**Analysis Summary**")
+                        st.info(generate_analysis_summary(top_pick, top_pick.get('ict_scores', {})))
+
+    # PAGE: ALERT DASHBOARD
+    elif page_clean == "Alert Dashboard":
         display_realtime_alerts()
-    elif page == "Alert History":
-        display_sent_alerts()
-    elif page == "Alert Settings":
-        display_alert_settings()
-    elif page == "Backtesting":
-        display_backtesting()
 
-    # Sidebar Status
+    # PAGE: ALERT HISTORY
+    elif page_clean == "Alert History":
+        display_sent_alerts()
+
+    # PAGE: ALERT SETTINGS
+    elif page_clean == "Alert Settings":
+        display_alert_settings()
+
+    # OTHER PAGES (keep original functionality)
+    elif page_clean == "Watchlist":
+        display_watchlist()
+        
+    elif page_clean == "Portfolio Tracker":
+        display_portfolio()
+        
+    elif page_clean == "Backtesting":
+        display_backtesting()
+        
+    elif page_clean == "Correlation Matrix":
+        st.subheader("Asset Correlation Analysis")
+        # ... (keep original correlation matrix code)
+        
+    elif page_clean == "Settings":
+        st.subheader("User Settings & Preferences")
+        # ... (keep original settings code, but add link to alert settings)
+
+    # Enhanced sidebar with alert status
     st.sidebar.markdown("---")
-    st.sidebar.subheader("System Status")
+    st.sidebar.subheader("Alert System Status")
     
-    alert_count = len([a for a in st.session_state.sent_alerts 
-                      if (datetime.now() - datetime.fromisoformat(a.get('sent_time', '2000-01-01T00:00:00'))).days < 1])
+    # Quick alert status
+    enabled_services = []
+    for service_name, config in st.session_state.preferences['notification_services'].items():
+        if config.get('enabled', False):
+            enabled_services.append(service_name.capitalize())
+    
+    if enabled_services:
+        st.sidebar.success(f"✅ Alerts active via: {', '.join(enabled_services)}")
+    else:
+        st.sidebar.warning("⚠️ No alert channels configured")
     
     st.sidebar.metric("Today's Alerts", alert_count)
-    st.sidebar.metric("Watchlist Items", len(st.session_state.watchlist))
-    st.sidebar.metric("Kill Zone", kill_zone['name'][:20])
+    st.sidebar.metric("Confidence Threshold", f"{st.session_state.preferences.get('alert_threshold', 90)}%")
     
+    # Quick test button
+    if st.sidebar.button("Test Alert System", use_container_width=True):
+        test_alert = {
+            'type': 'trade_signal',
+            'symbol': 'TEST',
+            'signal': 'TEST SIGNAL',
+            'confidence': 95,
+            'current_price': 100.00,
+            'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        }
+        notification_manager.config = st.session_state.preferences['notification_services']
+        results = notification_manager.send_multichannel_alert(test_alert)
+        st.sidebar.success(f"Test sent to {sum(1 for r in results.values() if r)} channels")
+
     st.sidebar.markdown("---")
     st.sidebar.info(f"""
-    **Current Time**: {datetime.now().strftime("%H:%M:%S")}
+    **Alert System**: {"Active" if any(s.get('enabled') for s in st.session_state.preferences['notification_services'].values()) else "Inactive"}
     
-    **Market Status**: Active
+    **Last Alert**: {st.session_state.sent_alerts[-1]['timestamp'] if st.session_state.sent_alerts else 'None'}
     
-    **Analysis Count**: {st.session_state.analyze_count}/{len(NIFTY_50)}
+    **Kill Zone**: {kill_zone['name']}
+    
+    **Time**: {datetime.now().strftime("%H:%M:%S")}
     """)
-    
+
     st.sidebar.markdown("---")
-    st.sidebar.success("**ICT Analyzer Pro** - v2.0")
+    st.sidebar.success("**ICT Analyzer Pro** - Enhanced Alert Edition")
+
+
+import streamlit as st
+
+# Session state initialize karo (ye app ke starting mein daal do)
+if 'analyze_count' not in st.session_state:
+    st.session_state.analyze_count = 0
+
+analyze_count = st.session_state.analyze_count
 
 
 if __name__ == "__main__":
