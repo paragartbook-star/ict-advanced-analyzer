@@ -21,6 +21,75 @@ import aiohttp
 from twilio.rest import Client
 import discord
 
+
+from datetime import datetime, time as dtime, timedelta
+
+def get_kill_zone() -> Dict:
+    """
+    Current ICT Kill Zone ko detect karta hai IST time ke hisaab se.
+    """
+    # Current time in IST
+    ist_offset = timedelta(hours=5, minutes=30)
+    now_utc = datetime.utcnow()
+    current_time_ist = now_utc + ist_offset
+    current_timet = dtime(current_time_ist.hour, current_time_ist.minute)
+
+    # Kill Zones ki list (IST time mein)
+    zones = [
+        {
+            "name": "London Open Kill Zone",
+            "start": dtime(13, 0),
+            "end": dtime(16, 0),
+            "multiplier": 2.5,
+            "priority": 5,
+            "description": "Sabse high liquidity aur volatility wala time",
+            "active": False
+        },
+        {
+            "name": "New York Open Kill Zone",
+            "start": dtime(18, 30),
+            "end": dtime(21, 30),
+            "multiplier": 2.0,
+            "priority": 4,
+            "description": "Strong moves aur institutional activity",
+            "active": False
+        },
+        {
+            "name": "London Close Kill Zone",
+            "start": dtime(20, 30),
+            "end": dtime(22, 30),
+            "multiplier": 1.8,
+            "priority": 3,
+            "description": "Position squaring aur reversals ka time",
+            "active": False
+        },
+        {
+            "name": "Asian Kill Zone",
+            "start": dtime(5, 30),
+            "end": dtime(8, 30),
+            "multiplier": 1.2,
+            "priority": 2,
+            "description": "Low volatility, range trading",
+            "active": False
+        }
+    ]
+
+    default = {
+        "name": "No Active Kill Zone",
+        "active": False,
+        "multiplier": 1.0,
+        "priority": 0,
+        "description": "Normal market conditions"
+    }
+
+    for zone in zones:
+        if zone["start"] <= current_timet <= zone["end"]:
+            zone["active"] = True
+            return zone
+
+    return default
+
+
 warnings.filterwarnings('ignore')
 
 # ═══════════════════════════════════════════════════════════════════════════════
