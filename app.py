@@ -78,7 +78,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Custom CSS - TradingView Dark Theme
+# Professional Dark Theme CSS with Alert Styling
 st.markdown("""
 <style>
     /* Main Background - Deep TradingView Black */
@@ -138,9 +138,114 @@ st.markdown("""
         transition: all 0.2s;
     }
     
+    
     .stButton>button:hover {
-        background: #1e53e5 !important;
+        background-color: #e6e6e6;
     }
+
+    .status-box {
+        background-color: #0f0f0f;
+        border: 1px solid #1a1a1a;
+        padding: 16px;
+        border-radius: 4px;
+        margin: 12px 0;
+    }
+    
+    .alert-box {
+        background-color: #1a0000;
+        border: 2px solid #ff4444;
+        padding: 20px;
+        border-radius: 8px;
+        margin: 12px 0;
+        animation: pulse 2s infinite;
+    }
+    
+    @keyframes pulse {
+        0% { border-color: #ff4444; }
+        50% { border-color: #ff8888; }
+        100% { border-color: #ff4444; }
+    }
+    
+    .status-box h3 {
+        margin: 0 0 8px 0;
+        font-size: 16px;
+    }
+    
+    .status-box p {
+        margin: 0;
+        color: #999999;
+        font-size: 14px;
+    }
+
+    .info-text {
+        color: #999999;
+        font-size: 14px;
+        line-height: 1.6;
+    }
+    
+    .stSelectbox label, .stSlider label, .stRadio label, .stCheckbox label {
+        color: #ffffff;
+        font-weight: 500;
+        font-size: 14px;
+    }
+    
+    .stTextInput input {
+        background-color: #0f0f0f;
+        border: 1px solid #1a1a1a;
+        color: #ffffff;
+        border-radius: 4px;
+    }
+    
+    .stSelectbox select {
+        background-color: #0f0f0f;
+        border: 1px solid #1a1a1a;
+        color: #ffffff;
+    }
+    
+    hr {
+        border-color: #1a1a1a;
+    }
+    
+    .stProgress > div > div {
+        background-color: #ffffff;
+    }
+    
+    [data-testid="stExpander"] {
+        background-color: #0f0f0f;
+        border: 1px solid #1a1a1a;
+        border-radius: 4px;
+    }
+    
+    .trade-card {
+        background: linear-gradient(135deg, #0f0f0f 0%, #1a1a1a 100%);
+        border: 1px solid #333333;
+        border-radius: 8px;
+        padding: 20px;
+        margin: 10px 0;
+    }
+    
+    .trade-card.buy {
+        border-left: 5px solid #00ff00;
+    }
+    
+    .trade-card.sell {
+        border-left: 5px solid #ff4444;
+    }
+    
+    .notification-badge {
+        background-color: #ff4444;
+        color: white;
+        border-radius: 50%;
+        width: 20px;
+        height: 20px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 12px;
+        margin-left: 5px;
+    }
+</style>
+""", unsafe_allow_html=True)
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # SESSION STATE INITIALIZATION WITH ALERT SYSTEM
