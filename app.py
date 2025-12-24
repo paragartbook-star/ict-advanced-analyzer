@@ -12,22 +12,27 @@ import json
 import warnings
 
 warnings.filterwarnings('ignore')
-    
-    # ═══════════════════════════════════════════════════════════════════════════════
-    # ICT ADVANCED MULTI-ASSET ANALYZER - FULLY FEATURED 2026 EDITION
-    # ALL FEATURES INCLUDED: Watchlist, Alerts, Backtesting, FVG, Order Blocks, AI
-    # ═══════════════════════════════════════════════════════════════════════════════
-    
-    st.set_page_config(
-        page_title="ICT Pro Analyzer 2026",
-        page_icon="📊",
-        layout="wide",
-        initial_sidebar_state="expanded"
-    )
-    
-    # Custom CSS - Enhanced TradingView Theme
-    st.markdown("""
-    <style>
+
+st.set_page_config(
+    page_title="ICT Pro Analyzer 2026",
+    page_icon="📊",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
+
+# Custom CSS - Enhanced TradingView Theme
+st.markdown("""
+<style>
+    .stApp {
+        background: linear-gradient(135deg, #0f0f23 0%, #1a1a2e 50%, #0f0f23 100%);
+    }
+    # ... बाकी CSS
+</style>
+""", unsafe_allow_html=True)
+
+# SESSION STATE INITIALIZATION
+if 'watchlist' not in st.session_state:
+    st.session_state.watchlist = []
         .stApp {
             background: linear-gradient(135deg, #0f0f23 0%, #1a1a2e 50%, #0f0f23 100%);
         }
