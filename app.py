@@ -741,44 +741,96 @@ def main():
         
         st.markdown("---")
         
-# === Sidebar se move kiye gaye sections (data ke baad show karne ke liye) ===
-
-# PERFORMANCE HEATMAP
-show_heatmap = st.sidebar.checkbox("Show Performance Heatmap", value=True)  # Yeh sidebar mein hi rakh sakte ho, bas use yahan
-if show_heatmap and len(df_filtered) > 0:
-    st.markdown("## 🔥 Performance Heatmap")
-    
-    heatmap_data = df_filtered.pivot_table(
-        values='combined_score',
-        index='asset_type',
-        columns='trend',
-        aggfunc='mean'
-    ).fillna(0)
-    
-    fig = go.Figure(data=go.Heatmap(
-        z=heatmap_data.values,
-        x=heatmap_data.columns,
-        y=heatmap_data.index,
-        colorscale='Viridis',
-        text=heatmap_data.values.round(1),
-        texttemplate='%{text}',
-        textfont={"size": 14},
-        colorbar=dict(title="Score")
-    ))
-    
-    fig.update_layout(
-        title="Average Score by Asset Type & Trend",
-        template='plotly_dark',
-        height=400,
-        paper_bgcolor='rgba(26, 32, 44, 0.8)',
-        plot_bgcolor='rgba(26, 32, 44, 0.8)',
-        font=dict(color='#e2e8f0')
-    )
-    
-    st.plotly_chart(fig, use_container_width=True)
-
-# Baaki sections bhi yahan move kar do (Correlation, Trade History, ICT Radar etc.)
-# Same tarah se if conditions laga ke df_filtered use karo
+        # PERFORMANCE HEATMAP
+        if 'show_heatmap' in locals() and show_heatmap:
+            st.markdown("## 🔥 Performance Heatmap")
+            
+            # Create heatmap data
+            heatmap_data = df_filtered.pivot_table(
+                values='combined_score',
+                index='asset_type',
+                columns='trend',
+                aggfunc='mean'
+            ).fillna(0)
+            
+            fig = go.Figure(data=go.Heatmap(
+                z=heatmap_data.values,
+                x=heatmap_data.columns,
+                y=heatmap_data.index,
+                colorscale='Viridis',
+                text=heatmap_data.values.round(1),
+                texttemplate='%{text}',
+                textfont={"size": 14},
+                colorbar=dict(title="Score")
+            ))
+            
+            fig.update_layout(
+                title="Average Score by Asset Type & Trend",
+                template='plotly_dark',
+                height=400,
+                paper_bgcolor='rgba(26, 32, 44, 0.8)',
+                plot_bgcolor='rgba(26, 32, 44, 0.8)',
+                font=dict(color='#e2e8f0')
+            )
+            
+            st.plotly_chart(fig, use_container_width=True)
+        
+        st.markdown("---")
+        
+        # CORRELATION MATRIX
+        st.markdown("## 🔗 Score Correlation Analysis")
+        
+        # Select numeric columns for correlation
+        corr_cols = ['technical_score', 'fundamental_score', 'combined_score', 
+                     'confidence', 'risk', 'price_change_24h']
+        corr_data = df_filtered[corr_cols].corr()
+        
+        fig = go.Figure(data=go.Heatmap(
+            z=corr_data.values,
+            x=corr_cols,
+            y=corr_cols,
+            colorscale='RdBu',
+            zmid=0,
+            text=corr_data.values.round(2),
+            texttemplate='%{text}',
+            textfont={"size": 12},
+            colorbar=dict(title="Correlation")
+        ))
+        
+        fig.update_layout(
+            title="Feature Correlation Matrix",
+            template='plotly_dark',
+            height=500,
+            paper_bgcolor='rgba(26, 32, 44, 0.8)',
+            plot_bgcolor='rgba(26, 32, 44, 0.8)',
+            font=dict(color='#e2e8f0')
+        )
+        
+        st.plotly_chart(fig, use_container_width=True)
+        
+        st.markdown("---")
+        
+        # TRADE HISTORY
+        if len(st.session_state.trade_history) > 0:
+            st.markdown("## 📜 Recent Trade History")
+            
+            trade_df = pd.DataFrame(st.session_state.trade_history[-10:])
+            trade_df['time'] = trade_df['time'].dt.strftime('%Y-%m-%d %H:%M')
+            
+            st.dataframe(
+                trade_df[['symbol', 'type', 'price', 'signal', 'time']],
+                use_container_width=True,
+                height=300
+            )
+            
+            if st.button("🗑️ Clear Trade History"):
+                st.session_state.trade_history = []
+                st.rerun()
+        
+        st.markdown("---")
+        
+        # ICT CONCEPT BREAKDOWN
+        st.markdown("## 🧩 ICT Concept Analysis - Top 5 Assets")
         
         top_5_ict = df_filtered.head(5)
         
