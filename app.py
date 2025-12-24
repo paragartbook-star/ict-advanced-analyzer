@@ -1570,5 +1570,14 @@ def main():
     st.sidebar.success("**ICT Analyzer Pro** - Enhanced Alert Edition")
 
 
+import streamlit as st
+
+# Session state initialize karo (ye app ke starting mein daal do)
+if 'analyze_count' not in st.session_state:
+    st.session_state.analyze_count = 0
+
+analyze_count = st.session_state.analyze_count
+
+
 if __name__ == "__main__":
     main()
