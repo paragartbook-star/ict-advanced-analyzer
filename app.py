@@ -1803,7 +1803,7 @@ def show_auth_ui():
         with col2:
             new_password = st.text_input("Password (visible text)")
             st.caption("⚠️ Password is visible (Streamlit Cloud limitation). Type carefully!")
-            confirm_password = st.text_input("Confirm Password")
+            confirm_password = st.text_input("Confirm Password (visible text)")
             st.caption("⚠️ Note: Password fields are visible as text on public deployment (Streamlit Cloud limitation). Type carefully!")
             
             # Enable 2FA by default
