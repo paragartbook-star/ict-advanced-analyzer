@@ -943,6 +943,9 @@ def display_alert_settings():
             ['Pre-Market', 'Regular Hours', 'After-Hours', '24/7'],
             default=['Regular Hours', 'Pre-Market']
         )
+
+        selected_stocks = st.multiselect("Choose stocks to analyze", NIFTY_50, default=NIFTY_50[:10])
+        assets_to_analyze = selected_stocks
     
     st.write("---")
     st.subheader("📱 Notification Channels")
