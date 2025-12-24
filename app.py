@@ -21,6 +21,13 @@ import aiohttp
 from twilio.rest import Client
 import discord
 
+warnings.filterwarnings('ignore')
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# ENHANCED NOTIFICATION SYSTEM CONFIGURATION
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# Configuration dictionary for notification services
 
 from datetime import datetime, time as dtime, timedelta
 
@@ -90,13 +97,6 @@ def get_kill_zone() -> Dict:
     return default
 
 
-warnings.filterwarnings('ignore')
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# ENHANCED NOTIFICATION SYSTEM CONFIGURATION
-# ═══════════════════════════════════════════════════════════════════════════════
-
-# Configuration dictionary for notification services
 NOTIFICATION_CONFIG = {
     'email': {
         'enabled': False,
